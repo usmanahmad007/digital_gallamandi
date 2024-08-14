@@ -92,7 +92,7 @@ class _ConsentscreenState extends State<Consentscreen> {
           } else if (sallerDoc.exists) {
             Fluttertoast.showToast(msg: "Sign-in successful!");
 
-            _showFloatingSnackBar(context,'Sign-in successful!', Colors.green);
+          //  _showFloatingSnackBar(context,'Sign-in successful!', Colors.green);
             Timer(
               const Duration(seconds: 3),
               () => Navigator.pushReplacement(

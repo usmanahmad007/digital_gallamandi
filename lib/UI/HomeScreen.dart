@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/Notification.dart';
 import 'package:zrai_mart/UI/SearchScreen.dart';
+import 'package:zrai_mart/UI/productFullView.dart';
+import 'package:zrai_mart/UI/seeAllScreen.dart';
 import 'package:zrai_mart/UI/weather.dart';
-
+import 'package:zrai_mart/UI/wishListScreen.dart';
 import '../models/Product.dart';
 import 'CategoryList.dart';
 
@@ -76,46 +79,52 @@ class _HomescreenState extends State<Homescreen> {
   }
 
   Widget _buildProductItem(Product product) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-        color: Colors.white,
-      ),
-      margin: EdgeInsets.all(8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
-            child: Image.network(
-              product.imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: 150,
+    return GestureDetector(
+      onTap: (){
+        Navigator.push(context, MaterialPageRoute(builder: (context)=>Productfullview(imageUrl: product.imageUrl, productName: product.name, shortDescription: product.description, price: product.price, categoryName: "")));
+
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 6,
+              offset: Offset(0, 2),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              product.name,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ],
+          color: Colors.white,
+        ),
+        margin: EdgeInsets.all(8.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
+              child: Image.network(
+                product.imageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: 150,
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Text(
-              '\$${product.price.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 16, color: Colors.green),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                product.name,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),maxLines: 2,
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(
+                '\$${product.price.toStringAsFixed(2)}',
+                style: TextStyle(fontSize: 16, color: Colors.green),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -178,25 +187,40 @@ class _HomescreenState extends State<Homescreen> {
                           Row(
                             children: [
                               GestureDetector(
+                                  onTap:(){
+                                    Navigator.push(context, MaterialPageRoute(builder: (context)=>WeatherScreen()));
+                                  },
+                                  child: Container(
+                                    width:30,
+                                    height:30,
+                                    decoration:BoxDecoration(
+                                      borderRadius: BorderRadius.circular(100),
+                                      color: Colors.blue
+                                    ),
+                                    child: Image.asset(
+                                      "assets/iconweather.png",
+                                    ),
+                                  )),
+                              /*GestureDetector(
                                 onTap:(){
                                   Navigator.push(context, MaterialPageRoute(builder: (context)=>WeatherScreen()));
                                 },
                                   child: CircleAvatar(
                                 child: Image.asset(
-                                  "assets/iconweather.png",
+                                  "assets/iconweather.png",scale: 2,
                                 ),
                                 backgroundColor: Colors.blue,
-                              )),
+                              )),*/
                               IconButton(
                                 icon: Icon(Icons.notifications_active_outlined),
                                 onPressed: () {
-                                  // Notification icon action
+                                  Navigator.push(context, MaterialPageRoute(builder: (context)=>NotificationScreen()));
                                 },
                               ),
                               IconButton(
                                 icon: Icon(Icons.favorite_border),
                                 onPressed: () {
-                                  // Heart icon action
+                                  Navigator.push(context, MaterialPageRoute(builder: (context)=>wishListScreen()));
                                 },
                               ),
                             ],
@@ -245,7 +269,10 @@ class _HomescreenState extends State<Homescreen> {
                         style: TextStyle(
                             color: Colors.black, fontWeight: FontWeight.bold),
                       ),
-                      TextButton(onPressed: () {}, child: Text("See All")),
+                      TextButton(onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context)=>SeeAllScreen()));
+
+                      }, child: Text("See All")),
                     ],
                   ),
                   SizedBox(height: 10),
@@ -260,7 +287,9 @@ class _HomescreenState extends State<Homescreen> {
                         style: TextStyle(
                             color: Colors.black, fontWeight: FontWeight.bold),
                       ),
-                      TextButton(onPressed: () {}, child: Text("See All")),
+                      TextButton(onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context)=>SeeAllScreen()));
+                      }, child: Text("See All")),
                     ],
                   ),
                   SizedBox(height: 10),
@@ -314,48 +343,53 @@ class _HomescreenState extends State<Homescreen> {
         itemCount: _products.length,
         itemBuilder: (context, index) {
           final product = _products[index];
-          return Container(
-            width: 200,
-            margin: EdgeInsets.fromLTRB(0, 8, 8, 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10.0),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                ),
-              ],
-              color: Colors.white,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(10.0)),
-                  child: Image.network(
-                    product.imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: 150,
+          return GestureDetector(
+            onTap: (){
+              Navigator.push(context, MaterialPageRoute(builder: (context)=>Productfullview(imageUrl: product.imageUrl, productName: product.name, shortDescription: product.description, price: product.price, categoryName: "")));
+            },
+            child: Container(
+              width: 200,
+              margin: EdgeInsets.fromLTRB(0, 8, 8, 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    product.name,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ],
+                color: Colors.white,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(10.0)),
+                    child: Image.network(
+                      product.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: 150,
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Text(
-                    '\$${product.price.toStringAsFixed(2)}',
-                    style: TextStyle(fontSize: 16, color: Colors.green),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      product.name,
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),maxLines: 2,
+                    ),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      '\$${product.price.toStringAsFixed(2)}',
+                      style: TextStyle(fontSize: 16, color: Colors.green),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
