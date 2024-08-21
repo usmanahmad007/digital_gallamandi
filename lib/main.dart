@@ -1,8 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:zrai_mart/UI/splash.dart';
+import 'package:zrai_mart/UI/splashScreen/splash.dart';
 import 'package:provider/provider.dart';
-import 'package:zrai_mart/UI/splash.dart';
+import 'package:zrai_mart/UI/splashScreen/splash.dart';
 import 'package:zrai_mart/provider/ProductProvider.dart';
 
 import 'firebase_options.dart';
