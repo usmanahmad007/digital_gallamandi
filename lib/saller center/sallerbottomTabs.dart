@@ -16,7 +16,6 @@ class _sallerBottomTabsState extends State<sallerBottomTabs> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = [
-    sallerHomescreen(),
     sallerProductScreen(),
     sallerOrdersscreen(),
     sallerBlogScreen(),
@@ -44,10 +43,10 @@ class _sallerBottomTabsState extends State<sallerBottomTabs> {
             icon: Icon(Icons.home),
             label: 'Home',
           ),
-          BottomNavigationBarItem(
+          /*BottomNavigationBarItem(
             icon: Icon(Icons.add),
             label: 'add product',
-          ),
+          ),*/
           BottomNavigationBarItem(
             icon: Icon(Icons.list),
             label: 'Orders',

@@ -119,7 +119,7 @@ class _HomescreenState extends State<Homescreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
-                '\$${product.price.toStringAsFixed(2)}',
+                'PKR${product.price.toStringAsFixed(2)}',
                 style: TextStyle(fontSize: 16, color: Colors.green),
               ),
             ),
@@ -272,7 +272,7 @@ class _HomescreenState extends State<Homescreen> {
                       TextButton(onPressed: () {
                         Navigator.push(context, MaterialPageRoute(builder: (context)=>SeeAllScreen()));
 
-                      }, child: Text("See All")),
+                      }, child: Text("See All",style: TextStyle(color: Colors.black),)),
                     ],
                   ),
                   SizedBox(height: 10),
@@ -289,7 +289,7 @@ class _HomescreenState extends State<Homescreen> {
                       ),
                       TextButton(onPressed: () {
                         Navigator.push(context, MaterialPageRoute(builder: (context)=>SeeAllScreen()));
-                      }, child: Text("See All")),
+                      }, child: Text("See All",style: TextStyle(color: Colors.black),)),
                     ],
                   ),
                   SizedBox(height: 10),
@@ -345,7 +345,7 @@ class _HomescreenState extends State<Homescreen> {
           final product = _products[index];
           return GestureDetector(
             onTap: (){
-              Navigator.push(context, MaterialPageRoute(builder: (context)=>Productfullview(imageUrl: product.imageUrl, productName: product.name, shortDescription: product.description, price: product.price, categoryName: "")));
+              Navigator.push(context, MaterialPageRoute(builder: (context)=>Productfullview(imageUrl: product.imageUrl, productName: product.name, shortDescription: product.description, price: product.price, categoryName: product.category,)));
             },
             child: Container(
               width: 200,
@@ -384,7 +384,7 @@ class _HomescreenState extends State<Homescreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: Text(
-                      '\$${product.price.toStringAsFixed(2)}',
+                      'PKR${product.price.toStringAsFixed(2)}',
                       style: TextStyle(fontSize: 16, color: Colors.green),
                     ),
                   ),

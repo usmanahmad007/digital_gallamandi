@@ -1,20 +1,24 @@
 import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-class Addproduct extends StatefulWidget {
-  const Addproduct({Key? key}) : super(key: key);
+class EditProduct extends StatefulWidget {
+  final String productId;
+
+  const EditProduct({required this.productId, super.key});
 
   @override
-  _AddproductState createState() => _AddproductState();
+  State<EditProduct> createState() => _EditProductState();
 }
 
-class _AddproductState extends State<Addproduct> {
-  String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+class _EditProductState extends State<EditProduct> {
   File? _image;
+  String? _imageUrl;
+  String? _selectedCategory;
   final picker = ImagePicker();
   bool _isUploading = false;
   final _formKey = GlobalKey<FormState>();
@@ -25,14 +29,32 @@ class _AddproductState extends State<Addproduct> {
   final FocusNode _descriptionFocusNode = FocusNode();
   final FocusNode _priceFocusNode = FocusNode();
 
-  // New fields
-  String? _selectedCategory;
   List<DropdownMenuItem<String>> _categoryDropdownItems = [];
 
   @override
   void initState() {
     super.initState();
+    print(widget.productId);
+    _loadProductData();
     _loadCategories();
+  }
+
+  Future<void> _loadProductData() async {
+    DocumentSnapshot productDoc = await FirebaseFirestore.instance
+        .collection('products')
+        .doc(widget.productId)
+        .get();
+
+    if (productDoc.exists) {
+      Map<String, dynamic> productData = productDoc.data() as Map<String, dynamic>;
+      _titleController.text = productData['title'] ?? '';
+      _descriptionController.text = productData['description'] ?? '';
+      _priceController.text = productData['price'] ?? '';
+      _imageUrl = productData['imageUrl'];
+      _selectedCategory = productData['category'];
+
+      setState(() {});
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -56,16 +78,17 @@ class _AddproductState extends State<Addproduct> {
       source: isCamera ? ImageSource.camera : ImageSource.gallery,
     );
 
-    setState(() {
-      if (pickedFile != null) {
+    if (pickedFile != null) {
+      setState(() {
         _image = File(pickedFile.path);
-      } else {
-        print('No image selected.');
-      }
-    });
+      });
+    } else {
+      print('No image selected.');
+    }
   }
 
   Future<String?> uploadImageToFirebase(File imageFile) async {
+    String fileName = DateTime.now().millisecondsSinceEpoch.toString();
     Reference firebaseStorageRef = FirebaseStorage.instance.ref().child('productImages/$fileName');
 
     try {
@@ -79,17 +102,38 @@ class _AddproductState extends State<Addproduct> {
     }
   }
 
-  void _uploadProduct() async {
-    if (_image == null) {
-      _showSnackbar('Please select an image first', Colors.red);
-      return;
-    }
+  void _pickImage() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library),
+                title: Text('Gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  getImage(false);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_camera),
+                title: Text('Camera'),
+                onTap: () {
+                  Navigator.pop(context);
+                  getImage(true);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-    if (_selectedCategory == null) {
-      _showSnackbar('Please select a category', Colors.red);
-      return;
-    }
-
+  void _editProduct() async {
     if (!_formKey.currentState!.validate()) {
       _showSnackbar('Please fill all the fields correctly', Colors.red);
       return;
@@ -99,29 +143,28 @@ class _AddproductState extends State<Addproduct> {
       _isUploading = true;
     });
 
-    String? imageUrl = await uploadImageToFirebase(_image!);
+    String? imageUrl = _imageUrl;
+    if (_image != null) {
+      imageUrl = await uploadImageToFirebase(_image!);
+    }
 
     setState(() {
       _isUploading = false;
     });
 
     if (imageUrl != null) {
-      _showSnackbar('Product uploaded successfully', Colors.green);
-
-      // Upload product data to Firestore
-      FirebaseFirestore.instance.collection('products').add({
+      FirebaseFirestore.instance.collection('products').doc(widget.productId).update({
         'title': _titleController.text,
         'description': _descriptionController.text,
         'price': _priceController.text,
         'imageUrl': imageUrl,
-        'sellerId': FirebaseAuth.instance.currentUser?.uid,
-        'productId': fileName,
-        'category': _selectedCategory, // Store the selected category name
-        'buyUID': '',
+        'category': _selectedCategory,
       });
+
+      _showSnackbar('Product updated successfully', Colors.green);
       Navigator.pop(context);
     } else {
-      _showSnackbar('Product upload failed', Colors.red);
+      _showSnackbar('Product update failed', Colors.red);
     }
   }
 
@@ -160,7 +203,6 @@ class _AddproductState extends State<Addproduct> {
       onChanged: (value) {
         setState(() {
           _selectedCategory = value;
-          print(_selectedCategory);
         });
       },
       dropdownColor: Colors.white, // Background color of the dropdown menu
@@ -249,12 +291,12 @@ class _AddproductState extends State<Addproduct> {
       decoration: InputDecoration(
         labelText: 'Price',
         prefixIcon: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Text(
-            "PKR",
-            style: TextStyle(color: Colors.grey, fontSize: 14),
-          ),
-        ),
+            padding: const EdgeInsets.all(12.0),
+            child: Text(
+              "PKR",style: TextStyle(
+                color: Colors.grey,fontSize: 18
+            ),
+            )),
         labelStyle: TextStyle(color: Colors.grey),
         filled: true,
         fillColor: _priceFocusNode.hasFocus ? Colors.greenAccent.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
@@ -283,14 +325,13 @@ class _AddproductState extends State<Addproduct> {
 
   @override
   Widget build(BuildContext context) {
-    final double width = MediaQuery.of(context).size.width;
-
+    final width=MediaQuery.of(context).size.width;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Product'),
+        title: Text('Edit Product'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: Icon(Icons.add),
             onPressed: _pickImage,
           ),
         ],
@@ -298,121 +339,108 @@ class _AddproductState extends State<Addproduct> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _image == null
-                    ? GestureDetector(
-                  onTap: _pickImage,
-                  child: Container(
-                    width: width / 8,
-                    height: 200,
-                    decoration: BoxDecoration(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _image == null && _imageUrl == null
+                  ? GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  width: width / 8,
+                  height: 200,
+                  decoration: BoxDecoration(
                       color: Colors.grey.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Center(
-                      child: Container(
-                        decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
                           color: Colors.green,
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        width: 150,
-                        height: 50,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.add),
-                            Text(
-                              "Add Image",
-                              style: TextStyle(color: Colors.black),
-                            )
-                          ],
-                        ),
+                          borderRadius: BorderRadius.circular(25)),
+                      width: 150,
+                      height: 50,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add),
+                          Text(
+                            "Add Image",
+                            style: TextStyle(color: Colors.black),
+                          )
+                        ],
                       ),
                     ),
                   ),
-                )
-                    : Container(
-                  width: width / 0.4,
-                  height: 200,
-                  child: Image.file(
+                ),
+              )
+                  : _image != null
+                  ? GestureDetector(
+                onTap: _pickImage,
+                    child: Container(
+                                    width: width / 0.4,
+                                    height: 200,
+                                    child: Image.file(
                     _image!,
                     fit: BoxFit.cover,
+                                    ),
+                                  ),
+                  )
+                  : GestureDetector(
+                onTap: _pickImage,
+                    child: Container(
+                                    width: width / 0.4,
+                                    height: 200,
+                                    child: Image.network(
+                    _imageUrl!,
+                    fit: BoxFit.cover,
+                                    ),
+                                  ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                _buildTitleField(),
-                const SizedBox(height: 16),
-                _buildDescriptionField(),
-                const SizedBox(height: 16),
-                _buildPriceField(),
-                const SizedBox(height: 16),
-                _buildDropdownField(), // Updated Dropdown Field
-                const SizedBox(height: 16),
-                _isUploading
-                    ? const Center(child: CircularProgressIndicator())
-                    : Container(
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
+              SizedBox(height: 20),
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _buildTitleField(),
+                    SizedBox(height: 10),
+                    _buildDescriptionField(),
+                    SizedBox(height: 10),
+                    _buildPriceField(),
+                    SizedBox(height: 10),
+                    _buildDropdownField(),
+                    SizedBox(height: 20),
+                    _isUploading
+                        ? Center(child: CircularProgressIndicator())
+                        : Container(
+                      width: width/0.9,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
                         borderRadius: BorderRadius.circular(25),
                       ),
-                    ),
-                    onPressed: _uploadProduct,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 15),
-                      child: Text(
-                        'Add Product',
-                        style: TextStyle(color: Colors.black),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        onPressed: _editProduct,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          child: Text(
+                            'Update',
+                            style: TextStyle(color: Colors.black),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _pickImage() {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Gallery'),
-                onTap: () {
-                  Navigator.pop(context);
-                  getImage(false);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_camera),
-                title: const Text('Camera'),
-                onTap: () {
-                  Navigator.pop(context);
-                  getImage(true);
-                },
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

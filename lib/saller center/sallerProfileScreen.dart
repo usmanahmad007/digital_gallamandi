@@ -222,7 +222,7 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
               trailingIcon: Icons.keyboard_arrow_right,
               onTap: handleLanguageTap,
             ),
-            ListTile(
+            /*ListTile(
               leading: Icon(Icons.remove_red_eye_outlined),
               trailing: Switch(
                 value: light,
@@ -237,7 +237,8 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
                 'Dark Mode',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
-            ),
+            ),*/
+
             sallerCustomGestureDetector(
               leadingIcon: Icons.lock_outline,
               title: 'Privacy Policy',

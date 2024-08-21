@@ -1,28 +1,33 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/saller%20center/EditProduct.dart';
 
-class Productfullview extends StatefulWidget {
+class SallerProductFullView extends StatefulWidget {
   final String imageUrl;
   final String productName;
   final String shortDescription;
   final double price;
   final String categoryName;
+  final String productId;
 
-  const Productfullview({
+  const SallerProductFullView({
     Key? key,
     required this.imageUrl,
     required this.productName,
     required this.shortDescription,
     required this.price,
     required this.categoryName,
+    required this.productId,
   }) : super(key: key);
 
   @override
   _ProductfullviewState createState() => _ProductfullviewState();
 }
 
-class _ProductfullviewState extends State<Productfullview> {
+class _ProductfullviewState extends State<SallerProductFullView> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   int _quantity = 1;
 
   void _incrementQuantity() {
@@ -37,6 +42,52 @@ class _ProductfullviewState extends State<Productfullview> {
         _quantity--;
       }
     });
+  }
+  Future<void> _deleteProduct(String productId) async {
+    try {
+      await _firestore.collection('products').doc(productId).delete();
+      _showSnackbar('Product deleted successfully', Colors.green);
+    } catch (e) {
+      _showSnackbar('Error deleting product: $e', Colors.red);
+    }
+  }
+
+  void _showDeleteConfirmationDialog(String productId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Text('Delete Product'),
+              Icon(Icons.delete, color: Colors.red, size: 30),
+            ],
+          ),
+          content: Text('Are you sure you want to delete this product?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('No', style: TextStyle(color: Colors.black)),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _deleteProduct(productId);
+                },
+                child: Text('Yes', style: TextStyle(color: Colors.black)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
 
@@ -67,7 +118,6 @@ try{
     'description': widget.shortDescription,
     'price': widget.price,
     'imageUrl': widget.imageUrl,
-    'category': widget.categoryName,
     'quantity': 1,
   });
   _showSnackbar('Product uploaded successfully', Colors.green);
@@ -207,7 +257,11 @@ try{
             Container(
               width: width/2.2,
               child: ElevatedButton(
-                onPressed: _buyNow,
+                onPressed: (){
+                  print(widget.productId);
+                  _showDeleteConfirmationDialog(widget.productId);
+
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   padding: EdgeInsets.symmetric(vertical: 15.0),
@@ -215,14 +269,16 @@ try{
                     borderRadius: BorderRadius.circular(20.0),
                   ),
                 ),
-                child: Text('Buy now',style: TextStyle(
-                    color: Colors.green
+                child: Text('Delete',style: TextStyle(
+                    color: Colors.red
                 ),),
               ),
             ),Container(
               width: width/2.2,
               child: ElevatedButton(
-                onPressed: _uploadProduct,
+                onPressed: (){
+                  Navigator.push(context, MaterialPageRoute(builder: (context)=>EditProduct(productId: widget.productId)));
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   padding: EdgeInsets.symmetric(vertical: 15.0),
@@ -230,7 +286,7 @@ try{
                     borderRadius: BorderRadius.circular(20.0),
                   ),
                 ),
-                child: Text('Add to cart',style: TextStyle(
+                child: Text('Edit',style: TextStyle(
                     color: Colors.black
                 ),),
               ),

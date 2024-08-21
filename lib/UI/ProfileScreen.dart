@@ -221,7 +221,7 @@ class _ProfilescreenState extends State<Profilescreen> {
               trailingIcon: Icons.keyboard_arrow_right,
               onTap: handleLanguageTap,
             ),
-            ListTile(
+            /*ListTile(
               leading: Icon(Icons.remove_red_eye_outlined),
               trailing: Switch(
                 value: light,
@@ -236,7 +236,7 @@ class _ProfilescreenState extends State<Profilescreen> {
                 'Dark Mode',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
-            ),
+            ),*/
             CustomGestureDetector(
               leadingIcon: Icons.lock_outline,
               title: 'Privacy Policy',
