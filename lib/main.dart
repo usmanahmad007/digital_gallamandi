@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:zrai_mart/UI/splashScreen/splash.dart';
 import 'package:provider/provider.dart';
 import 'package:zrai_mart/UI/splashScreen/splash.dart';
-import 'package:zrai_mart/provider/ProductProvider.dart';
 
 import 'firebase_options.dart';
 
@@ -14,13 +13,8 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => ProductProvider()),
-        // Add more providers as needed
-      ],
-      child: const MyApp(),
-    ),
+     const MyApp(),
+
   );
 
 }

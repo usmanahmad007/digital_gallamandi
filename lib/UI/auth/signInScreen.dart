@@ -148,15 +148,15 @@ class _SigninscreenState extends State<Signinscreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
-                          Checkbox(
+                          /*Checkbox(
                             value: _isChecked,
                             onChanged: (bool? value) {
                               setState(() {
                                 _isChecked = value ?? false;
                               });
                             },
-                          ),
-                          Text('Sign In as saller'),
+                          ),*/
+                          Text(''),
                         ],
                       ),
                       GestureDetector(

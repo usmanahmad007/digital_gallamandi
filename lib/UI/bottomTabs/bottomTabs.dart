@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:zrai_mart/UI/cartScreen/CartScreen.dart';
 import 'package:zrai_mart/UI/chatBot/ChatbotScreen.dart';
+import 'package:zrai_mart/UI/chatBot/chat.dart';
 import '../HomeScreen/HomeScreen.dart';
 import '../orderScreen/OrdersScreen.dart';
 import '../profile/ProfileScreen.dart';
@@ -68,7 +69,7 @@ class _BottomTabsState extends State<BottomTabs> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context)=>ChatbotScreen()));
+          Navigator.push(context, MaterialPageRoute(builder: (context)=>ChatPage()));
           // Define what happens when the button is pressed
           print('Chatbot button pressed');
         },

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/UI/chatBot/chat.dart';
 import 'package:zrai_mart/saller%20center/product/sallerProductScreen.dart';
 import 'package:zrai_mart/saller%20center/blog/sallerblog.dart';
 import '../../UI/chatBot/ChatbotScreen.dart';
@@ -63,7 +64,7 @@ class _sallerBottomTabsState extends State<sallerBottomTabs> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context)=>ChatbotScreen()));
+          Navigator.push(context, MaterialPageRoute(builder: (context)=>ChatPage()));
           // Define what happens when the button is pressed
           print('Chatbot button pressed');
         },

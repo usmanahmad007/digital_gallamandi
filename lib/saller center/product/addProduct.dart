@@ -67,8 +67,12 @@ class _AddproductState extends State<Addproduct> {
 
   Future<String?> uploadImageToFirebase(File imageFile) async {
     Reference firebaseStorageRef = FirebaseStorage.instance.ref().child('productImages/$fileName');
+    print("GIFT6");
+
 
     try {
+      print("GIFT8");
+
       UploadTask uploadTask = firebaseStorageRef.putFile(imageFile);
       TaskSnapshot taskSnapshot = await uploadTask;
       String downloadUrl = await taskSnapshot.ref.getDownloadURL();
@@ -84,28 +88,37 @@ class _AddproductState extends State<Addproduct> {
       _showSnackbar('Please select an image first', Colors.red);
       return;
     }
+    print("GIFT1");
 
     if (_selectedCategory == null) {
       _showSnackbar('Please select a category', Colors.red);
       return;
     }
+    print("GIFT2");
 
     if (!_formKey.currentState!.validate()) {
       _showSnackbar('Please fill all the fields correctly', Colors.red);
       return;
     }
+    print("GIFT3");
 
     setState(() {
       _isUploading = true;
     });
+    print("GIFT33");
+
 
     String? imageUrl = await uploadImageToFirebase(_image!);
+    print("GIFT4");
 
     setState(() {
       _isUploading = false;
     });
+    print("GIFT5");
 
     if (imageUrl != null) {
+      print("GIFT6");
+
       _showSnackbar('Product uploaded successfully', Colors.green);
 
       // Upload product data to Firestore

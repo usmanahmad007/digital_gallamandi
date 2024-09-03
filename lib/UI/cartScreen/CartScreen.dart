@@ -109,7 +109,7 @@ class _CartscreenState extends State<Cartscreen> {
                                 ],
                               ),
                               Text(
-                                'Total: \$${productTotalPrice.toStringAsFixed(2)}',
+                                'Total: PKR${productTotalPrice.toStringAsFixed(2)}',
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ],
@@ -131,7 +131,7 @@ class _CartscreenState extends State<Cartscreen> {
                       style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      '\$${totalPrice.toStringAsFixed(2)}',
+                      'PKR${totalPrice.toStringAsFixed(2)}',
                       style: const TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                     ),
                   ],
