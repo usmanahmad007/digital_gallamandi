@@ -1,0 +1,319 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:zrai_mart/UI/auth/ForgotPasswordScreen.dart';
+import 'package:zrai_mart/UI/auth/SignupScreen.dart';
+import 'package:zrai_mart/UI/bottomTabs/bottomTabs.dart';
+
+import '../../Admin/Admin Home/pinSCreen/pinSCreen.dart';
+import '../../saller center/bottomTabs/sallerbottomTabs.dart';
+import 'EmailVerificationScreen.dart';
+
+class Signinscreen extends StatefulWidget {
+  const Signinscreen({super.key});
+
+  @override
+  State<Signinscreen> createState() => _SigninscreenState();
+}
+
+class _SigninscreenState extends State<Signinscreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+  final _firebaseAuth=FirebaseAuth.instance;
+  bool _isPasswordVisible = false;
+  final bool _isAcceptedTerms = false;
+  final bool _isChecked = false;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  int _tapCount = 0;
+  bool isLoading=false;
+
+  void _togglePasswordVisibility() {
+    setState(() {
+      _isPasswordVisible = !_isPasswordVisible;
+    });
+  }
+  void _showFloatingSnackBar(String message, Color backgroundColor) {
+    final snackBar = SnackBar(
+      content: Text(message),
+      backgroundColor: backgroundColor,
+      behavior: SnackBarBehavior.fixed,
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    super.dispose();
+  }
+  Future<void> _signIn() async {
+    if (_formKey.currentState?.validate() ?? false) {
+      setState(() {
+        isLoading=true;
+      });
+      try {
+        UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+        User? user = userCredential.user;
+
+        if (user != null) {
+          if (!user.emailVerified) {
+            // Navigate to email verification screen
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const EmailVerificationScreen()),
+            );
+            return;
+          }
+
+          DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
+          DocumentSnapshot sallerDoc = await _firestore.collection('saller').doc(user.uid).get();
+
+          if (userDoc.exists) {
+            Fluttertoast.showToast( msg: 'sign-in successful!');
+
+          //  _showFloatingSnackBar('Sign-in successful!', Colors.green);
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const BottomTabs()),
+                  (Route<dynamic> route) => false,
+            );
+          } else if (sallerDoc.exists) {
+            Fluttertoast.showToast( msg: 'sign-in successful!');
+
+            // _showFloatingSnackBar('Sign-in successful!', Colors.green);
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const sallerBottomTabs()),
+                  (Route<dynamic> route) => false,
+            );
+          } else {
+            Fluttertoast.showToast( msg: 'User not found');
+
+          //  _showFloatingSnackBar('User not found.', Colors.red);
+          }
+        }
+      } on FirebaseAuthException catch (e) {
+        String message;
+        if (e.code == 'user-not-found') {
+          message = 'No user found for that email.';
+        } else if (e.code == 'wrong-password') {
+          message = 'Wrong password provided.';
+        } else {
+          message = 'Sign-in failed. ${e.message}';
+        }
+        Fluttertoast.showToast(msg: message);
+        //_showFloatingSnackBar(message, Colors.red);
+      }
+      setState(() {
+        isLoading=false;
+      });
+    }
+  }
+  void _countTap() {
+    setState(() {
+      _tapCount++;
+    });
+    if (_tapCount == 7) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const PinCScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height=MediaQuery.of(context).size.height;
+    final width=MediaQuery.of(context).size.width;
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.green,
+        title: const Text("Login",style: TextStyle(color: Colors.white),),
+        centerTitle: true,
+        actions: [
+          IconButton(onPressed: (){
+            Navigator.push(context, MaterialPageRoute(builder: (context)=> const PinCScreen()));
+
+          }, icon: const Icon(Icons.person,color: Colors.white,)),
+          const SizedBox(width: 10,),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const SizedBox(height: 30,),
+                  Image.asset("assets/img_1.png",width: 250,height: 250,),
+                  const Text("Login",style: TextStyle(
+                      fontSize: 24,fontWeight: FontWeight.bold
+                  )
+                  ),
+                  const SizedBox(height: 20),
+
+                  _buildEmailField(),
+                  const SizedBox(height: 20),
+                  _buildPasswordField(),
+                  const SizedBox(height: 10),
+               //   _buildTermsAndConditions(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          /*Checkbox(
+                            value: _isChecked,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                _isChecked = value ?? false;
+                              });
+                            },
+                          ),*/
+                          Text(''),
+                        ],
+                      ),
+                      GestureDetector(
+                        onTap: (){
+                          Navigator.push(context, MaterialPageRoute(builder: (context)=>const ForgotPasswordScreen()));
+                        },
+                        child: const Text("Forgot Password?"),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  isLoading==false?
+                  GestureDetector(
+                    onTap: _signIn,
+                    child: Center(
+                      child: Container(
+                        width: width/1,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            "Sign In",style: TextStyle(color: Colors.white,),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ): const CircularProgressIndicator(color: Colors.green,),
+                  const SizedBox(height: 70,),
+                  Row(mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("don't have an account?"),
+                      InkWell(
+                        onTap: (){
+                          Navigator.push(context, MaterialPageRoute(builder: (context)=>const Signupscreen()));
+
+                        },
+                          child: const Text("SignUp",style: TextStyle(color: Colors.green),))
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmailField() {
+    return TextFormField(
+      controller: _emailController,
+      focusNode: _emailFocusNode,
+      decoration: InputDecoration(
+        labelText: 'Email',
+        prefixIcon: const Icon(Icons.email, color: Colors.grey),
+        labelStyle: const TextStyle(color: Colors.grey),
+        filled: true,
+        fillColor: _emailFocusNode.hasFocus ? Colors.greenAccent.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        border: OutlineInputBorder(
+          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(25),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.green),
+          borderRadius: BorderRadius.circular(25),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+        errorBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.red),
+          borderRadius: BorderRadius.circular(25),
+        ),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please enter your email';
+        }
+        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+          return 'Please enter a valid email address';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return TextFormField(
+      controller: _passwordController,
+      focusNode: _passwordFocusNode,
+      obscureText: !_isPasswordVisible,
+      decoration: InputDecoration(
+        labelText: 'Password',
+        labelStyle: const TextStyle(color: Colors.grey),
+        prefixIcon: const Icon(Icons.lock, color: Colors.grey),
+        suffixIcon: IconButton(
+          icon: Icon(
+            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+            color: Colors.grey,
+          ),
+          onPressed: _togglePasswordVisibility,
+        ),
+        filled: true,
+        fillColor: _passwordFocusNode.hasFocus ? Colors.greenAccent.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        border: OutlineInputBorder(
+          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(25),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.green),
+          borderRadius: BorderRadius.circular(25),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+        errorBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Colors.red),
+          borderRadius: BorderRadius.circular(25),
+        ),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please enter your password';
+        }
+        return null;
+      },
+    );
+  }
+}
