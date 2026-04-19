@@ -11,56 +11,106 @@ class SellerProductDetailsScreen extends StatefulWidget {
       _SellerProductDetailsScreenState();
 }
 
-class _SellerProductDetailsScreenState
-    extends State<SellerProductDetailsScreen> {
-  Widget _buildReadOnlyField(String label, String value) {
-    return TextFormField(
-      initialValue: value,
-      readOnly: true,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.grey),
-        filled: true,
-        fillColor: Colors.green.withOpacity(0.1),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25),
-          borderSide: const BorderSide(color: Colors.green),
+class _SellerProductDetailsScreenState extends State<SellerProductDetailsScreen> {
+
+  // --- UI COMPONENTS ---
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey.shade600,
+          letterSpacing: 1.1,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Colors.green),
-          borderRadius: BorderRadius.circular(25),
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {Color? valueColor, bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+                color: valueColor ?? Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImagePreview(String? url, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Container(
+          height: 180,
+          width: 150,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            color: Colors.grey.shade100,
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: url != null && url != "pending"
+                ? Image.network(url, fit: BoxFit.cover)
+                : const Center(child: Icon(Icons.image_search, color: Colors.grey)),
+          ),
+        ),
+      ],
     );
   }
 
   void _copyToClipboard() {
     final data = '''
 Title: ${widget.product['title']}
-Price: PKR${widget.product['price'].toStringAsFixed(2)}
+Price: PKR ${widget.product['price']}
 Quantity: ${widget.product['quantity']}
-Total Price: ${widget.product['quantity'] * widget.product['price']}
-Address: ${widget.product['address']}
-City: ${widget.product['city']}
-Postal Code: ${widget.product['postalCode']}
+Total: PKR ${widget.product['totalPrice']}
+Customer Address: ${widget.product['address']}, ${widget.product['city']}
 ''';
     Clipboard.setData(ClipboardData(text: data)).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Data copied to clipboard!')),
+        const SnackBar(content: Text('Order details copied!'), behavior: SnackBarBehavior.floating),
       );
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final status = widget.product['status'].toString().toLowerCase();
+    final totalPrice = widget.product['totalPrice'] ?? (widget.product['quantity'] * widget.product['price']);
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: Text(widget.product['title']),
+        title: const Text("Order Details", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-          IconButton(onPressed: _copyToClipboard, icon: const Icon(
-            Icons.copy
-          ))
+          IconButton(
+            onPressed: _copyToClipboard,
+            icon: const Icon(Icons.content_copy_rounded, size: 20),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -68,76 +118,81 @@ Postal Code: ${widget.product['postalCode']}
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Colors.black),
-              ),
-              child: widget.product['image'] != null
-                  ? Center(
-                child: Image.network(
-                  widget.product['image'],
-                  height: 200,
-                  fit: BoxFit.cover,
-                ),
-              )
-                  : const Center(
-                child: Icon(
-                  Icons.image_not_supported,
-                  size: 100,
-                ),
+            // 1. IMAGE GALLERY SECTION
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildImagePreview(widget.product['image'], "Product Image"),
+                  if (widget.product['receiptImage'] != "pending") ...[
+                    const SizedBox(width: 16),
+                    _buildImagePreview(widget.product['receiptImage'], "Shipping Receipt"),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
-            widget.product['receiptImage']!="pending"?Container(
+            // 2. PRODUCT INFO CARD
+            _buildSectionTitle("Items Info"),
+            Container(
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Colors.black),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
               ),
-              child: widget.product['receiptImage'] != null
-                  ? Center(
-                child: Image.network(
-                  widget.product['receiptImage'],
-                  height: 200,
-                  fit: BoxFit.cover,
-                ),
-              )
-                  : const Center(
-                child: Icon(
-                  Icons.image_not_supported,
-                  size: 100,
-                ),
+              child: Column(
+                children: [
+                  _buildInfoRow("Product", widget.product['title'], isBold: true),
+                  const Divider(),
+                  _buildInfoRow("Unit Price", "PKR ${widget.product['price']}"),
+                  _buildInfoRow("Quantity", "x${widget.product['quantity']}"),
+                  _buildInfoRow("Status", status.toUpperCase(),
+                      valueColor: status == 'completed' ? Colors.green : status == 'cancelled' ? Colors.red : Colors.orange),
+                  if (status == 'cancelled' || status == 'returned')
+                    _buildInfoRow("Reason", widget.product['reason'] ?? "N/A", valueColor: Colors.redAccent),
+                  const Divider(),
+                  _buildInfoRow("Total Amount", "PKR $totalPrice", valueColor: Colors.green, isBold: true),
+                ],
               ),
-            ): Container(),
-            const SizedBox(height: 20),
-            _buildReadOnlyField('Title', widget.product['title']),
-            const SizedBox(height: 20),
-            _buildReadOnlyField(
-                'Price', 'PKR: ${widget.product['price'].toStringAsFixed(2)}'),
-            const SizedBox(height: 20),
-            _buildReadOnlyField('Quantity', widget.product['quantity'].toString()),
-            const SizedBox(height: 20),
-            _buildReadOnlyField(
-                'Total Price',
-                (widget.product['quantity'] * widget.product['price'])
-                    .toString()),
-            const SizedBox(height: 20),
-            _buildReadOnlyField('Status', widget.product['status']),
-            if(widget.product['status'].toString()=='cancelled')
-            const SizedBox(height: 20),
-            if(widget.product['status'].toString()=='cancelled')
-              _buildReadOnlyField('Reason', widget.product['reason']),
-            const SizedBox(height: 20),
-            _buildReadOnlyField('Address', widget.product['address']),
-            const SizedBox(height: 20),
-            _buildReadOnlyField('City', widget.product['city']),
-            const SizedBox(height: 20),
-            _buildReadOnlyField('Postal Code', widget.product['postalCode']),
-            const SizedBox(height: 20),
+            ),
 
+            const SizedBox(height: 24),
+
+            // 3. SHIPPING INFO CARD
+            _buildSectionTitle("Delivery Address"),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, color: Colors.green, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "${widget.product['address']}",
+                          style: const TextStyle(fontSize: 14, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: Divider(),
+                  ),
+                  _buildInfoRow("City", widget.product['city'] ?? "N/A"),
+                  _buildInfoRow("Postal Code", widget.product['postalCode'] ?? "N/A"),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
           ],
         ),
       ),

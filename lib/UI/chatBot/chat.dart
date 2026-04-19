@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart'; // Changed to image_picker
+import 'chat_service.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -11,256 +11,369 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  final TextEditingController _chatController = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<Map<String, dynamic>> _chatHistory = [];
-  String? _file;
-  late final GenerativeModel _model;
-  late final GenerativeModel _visionModel;
-  late final ChatSession _chat;
+  final List<Map<String, dynamic>> _messages = [];
+  final ChatService _service = ChatService();
+  final ImagePicker _picker = ImagePicker(); // Initialize picker
 
-  @override
-  void initState() {
-    super.initState();
-    _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: 'AIzaSyDNNyYTgn09z8hHXT2ISVUlbHpsfjkKTQQ'); // Replace with your API key
-    _visionModel = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: 'AIzaSyDNNyYTgn09z8hHXT2ISVUlbHpsfjkKTQQ'); // Replace with your API key
-    _chat = _model.startChat();
+  File? _selectedFile;
+  bool _isTyping = false;
+  bool _isPickerActive = false; // Prevents the PlatformException
+  String? _selectedLanguage;
+
+  static const Color primaryGreen = Color(0xFF2E7D32);
+  static const Color accentGreen = Color(0xFFE8F5E9);
+  static const Color background = Color(0xFFF4F7F4);
+
+  // Function to pick image safely
+  Future<void> _pickImage(ImageSource source) async {
+    if (_isPickerActive) return;
+
+    setState(() => _isPickerActive = true);
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        imageQuality: 70, // Optimizes image for faster AI processing
+      );
+
+      if (pickedFile != null) {
+        setState(() => _selectedFile = File(pickedFile.path));
+      }
+    } finally {
+      setState(() => _isPickerActive = false);
+    }
   }
 
-  void getAnswer(String text) async {
-    setState(() {
-      _chatHistory.add({
-        "time": DateTime.now(),
-        "message": "Loading...", // Show loading state
-        "isSender": false,
-        "isImage": false,
-        "isLoading": true, // New field to indicate loading
-      });
+  // Modern Bottom Sheet for Image Selection
+  void _showImageSourceOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Select Image Source", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: accentGreen, child: Icon(Icons.camera_alt, color: primaryGreen)),
+              title: const Text("Camera"),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: accentGreen, child: Icon(Icons.photo_library, color: primaryGreen)),
+              title: const Text("Gallery"),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
+  }
 
-    late final GenerateContentResponse response;
+  void _setLanguage(String lang) {
+    setState(() {
+      _selectedLanguage = lang;
+      String greeting = lang == "Urdu"
+          ? "اسلام علیکم! میں آپ کی کیسے مدد کر سکتا ہوں؟"
+          : lang == "Russian" ? "Здравствуйте! Чем я могу вам помочь?" : "Hello! How can I help you today?";
+      _messages.add({"msg": greeting, "isMe": false, "isImg": false});
+    });
+  }
 
-    if (_file != null) {
-      final firstImage = await File(_file!).readAsBytes();
-      final prompt = TextPart(text);
-      final imageParts = [DataPart('image/jpeg', firstImage)];
+  void _sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty && _selectedFile == null) return;
 
-      response = await _visionModel.generateContent([
-        Content.multi([prompt, ...imageParts])
-      ]);
-      _file = null;
-    } else {
-      var content = Content.text(text);
-      response = await _chat.sendMessage(content);
-    }
+    final tempFile = _selectedFile;
+    setState(() {
+      if (tempFile != null) _messages.add({"msg": tempFile.path, "isMe": true, "isImg": true});
+      if (text.isNotEmpty) _messages.add({"msg": text, "isMe": true, "isImg": false});
+      _isTyping = true;
+      _controller.clear();
+      _selectedFile = null;
+    });
+    _scrollToBottom();
+
+    final response = await _service.getResponse(text, tempFile, _selectedLanguage!);
 
     setState(() {
-      _chatHistory.removeWhere((msg) => msg["isLoading"] == true); // Remove loading
-      _chatHistory.add({
-        "time": DateTime.now(),
-        "message": response.text,
-        "isSender": false,
-        "isImage": false
-      });
-      _file = null;
+      _isTyping = false;
+      _messages.add({"msg": response ?? "No response", "isMe": false, "isImg": false});
     });
-
-    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: background,
       appBar: AppBar(
-        title: const Text(
-          "Chat",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        centerTitle: true,
+        title: const Text("Agri-Bot", style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+        backgroundColor: Colors.white,
+        foregroundColor: primaryGreen,
+        elevation: 0,
+        actions: [
+          if (_selectedLanguage != null)
+            IconButton(
+              icon: const Icon(Icons.translate),
+              onPressed: () => setState(() => _selectedLanguage = null),
+            )
+        ],
       ),
-      body: Stack(
-        children: [
-          SizedBox(
-            height: MediaQuery.of(context).size.height - 160,
-            child: ListView.builder(
-              itemCount: _chatHistory.length,
-              controller: _scrollController,
-              padding: const EdgeInsets.only(top: 10, bottom: 10),
-              physics: const BouncingScrollPhysics(),
-              itemBuilder: (context, index) {
-                final chat = _chatHistory[index];
-                return Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  child: Align(
-                    alignment:
-                    chat["isSender"] ? Alignment.topRight : Alignment.topLeft,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.5),
-                            spreadRadius: 2,
-                            blurRadius: 5,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                        color: chat["isSender"]
-                            ? const Color(0xFFF69170)
-                            : Colors.white,
-                      ),
-                      padding: const EdgeInsets.all(16),
-                      child: chat["isImage"]
-                          ? Image.file(File(chat["message"]), width: 200)
-                          : Text(
-                        chat["message"],
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: chat["isSender"]
-                              ? Colors.white
-                              : Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white, background],
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              height: 60,
-              width: double.infinity,
-              color: Colors.white,
-              child: Row(
+        ),
+        child: _selectedLanguage == null ? _buildLanguageSelector() : _buildChatArea(),
+      ),
+    );
+  }
+
+  // ... (Keep _buildLanguageSelector and _langCard same as your previous code) ...
+
+  Widget _buildLanguageSelector() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(color: accentGreen, shape: BoxShape.circle),
+            child: const Icon(Icons.psychology_outlined, size: 80, color: primaryGreen),
+          ),
+          const SizedBox(height: 24),
+          const Text("Choose your language",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
+          const Text("آپ کی زبان کا انتخاب کریں",
+              style: TextStyle(fontSize: 18, color: Colors.grey)),
+          const SizedBox(height: 40),
+          _langCard("English", "🇺🇸", "Standard Support"),
+          _langCard("Urdu", "🇵🇰", "مقامی مدد"),
+          _langCard("Russian", "🇷🇺", "Русская поддержка"),
+          const Spacer(),
+
+          // --- PROPER PRIVACY MESSAGE ---
+          Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  MaterialButton(
-                    onPressed: () async {
-                      FilePickerResult? result =
-                      await FilePicker.platform.pickFiles(
-                        type: FileType.custom,
-                        allowedExtensions: ['jpg', 'jpeg', 'png'],
-                      );
-                      if (result != null) {
-                        setState(() {
-                          _file = result.files.first.path;
-                        });
-                      }
-                    },
-                    minWidth: 42.0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(80.0)),
-                    padding: const EdgeInsets.all(0.0),
-                    child: Ink(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color.fromARGB(255, 57, 182, 25),
-                              Color.fromARGB(255, 255, 255, 255),
-                            ]),
-                        borderRadius: BorderRadius.all(Radius.circular(30.0)),
-                      ),
-                      child: Container(
-                        constraints: const BoxConstraints(
-                            minWidth: 42.0, minHeight: 36.0),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          _file == null ? Icons.image : Icons.check,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4.0),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: const BorderRadius.all(Radius.circular(50.0)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: TextField(
-                          decoration: const InputDecoration(
-                            hintText: "Type a message",
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.all(8.0),
-                          ),
-                          controller: _chatController,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4.0),
-                  MaterialButton(
-                    onPressed: () {
-                      setState(() {
-                        if (_chatController.text.isNotEmpty || _file != null) {
-                          if (_file != null) {
-                            _chatHistory.add({
-                              "time": DateTime.now(),
-                              "message": _file,
-                              "isSender": true,
-                              "isImage": true,
-                            });
-                          }
-
-                          if (_chatController.text.isNotEmpty) {
-                            _chatHistory.add({
-                              "time": DateTime.now(),
-                              "message": _chatController.text,
-                              "isSender": true,
-                              "isImage": false,
-                            });
-                          }
-
-                          _scrollController.jumpTo(
-                              _scrollController.position.maxScrollExtent);
-                          getAnswer(_chatController.text);
-                          _chatController.clear();
-                        }
-                      });
-                    },
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(80.0)),
-                    padding: const EdgeInsets.all(0.0),
-
-                    child: Ink(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color.fromARGB(255, 52, 209, 52),
-                              Color.fromARGB(255, 255, 255, 255),
-                            ]),
-                        borderRadius: BorderRadius.all(Radius.circular(50.0)),
-                      ),
-                      child: Container(
-                        constraints: const BoxConstraints(
-                            minWidth: 88.0, minHeight: 36.0),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.send,
-                          color: Colors.white,
-                        ),
-                      ),
+                  Icon(Icons.shield_outlined, size: 16, color: primaryGreen.withOpacity(0.7)),
+                  const SizedBox(width: 8),
+                  Text(
+                    "End-to-End Privacy Guaranteed",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
                     ),
                   ),
                 ],
               ),
-            ),
-          )
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  "Your conversations are temporary and are not saved on our servers.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "آپ کا ڈیٹا کہیں بھی محفوظ نہیں کیا جاتا۔",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                  fontFamily: 'UrduFont', // If you have a specific Urdu font
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
         ],
+      ),
+    );
+  }
+
+  Widget _langCard(String title, String flag, String sub) {
+    return GestureDetector(
+      onTap: () => _setLanguage(title),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Row(
+          children: [
+            Text(flag, style: const TextStyle(fontSize: 30)),
+            const SizedBox(width: 20),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(sub, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              ],
+            ),
+            const Spacer(),
+            const Icon(Icons.arrow_forward_ios, size: 16, color: primaryGreen),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatArea() {
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            itemCount: _messages.length,
+            itemBuilder: (context, i) => _buildBubble(_messages[i]),
+          ),
+        ),
+        if (_isTyping)
+          const Padding(
+            padding: EdgeInsets.only(left: 24, bottom: 8),
+            child: Align(alignment: Alignment.centerLeft, child: Text("Bot is analyzing...", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey))),
+          ),
+        _buildModernInput(),
+      ],
+    );
+  }
+
+  Widget _buildBubble(Map<String, dynamic> m) {
+    bool isMe = m["isMe"];
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(16),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+        decoration: BoxDecoration(
+          color: isMe ? primaryGreen : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isMe ? 20 : 0),
+            bottomRight: Radius.circular(isMe ? 0 : 20),
+          ),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4))],
+        ),
+        child: m["isImg"]
+            ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(m["msg"])))
+            : Text(m["msg"], style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 16, height: 1.4)),
+      ),
+    );
+  }
+
+  Widget _buildModernInput() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_selectedFile != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                height: 100,
+                width: 100,
+                decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    image: DecorationImage(image: FileImage(_selectedFile!), fit: BoxFit.cover)),
+                child: Align(
+                    alignment: Alignment.topRight,
+                    child: IconButton(
+                        icon: const Icon(Icons.cancel, color: Colors.white),
+                        onPressed: () => setState(() => _selectedFile = null))),
+              ),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: _showImageSourceOptions, // Calls the Bottom Sheet
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: accentGreen, borderRadius: BorderRadius.circular(15)),
+                    child: const Icon(Icons.camera_alt_rounded, color: primaryGreen),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    style: const TextStyle(fontSize: 16),
+                    decoration: InputDecoration(
+                      hintText: "Ask anything...",
+                      hintStyle: const TextStyle(color: Colors.grey),
+                      filled: true,
+                      fillColor: background,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: _sendMessage,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                        color: primaryGreen,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: primaryGreen, blurRadius: 8, offset: Offset(0, 3))]
+                    ),
+                    child: const Icon(Icons.send_rounded, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

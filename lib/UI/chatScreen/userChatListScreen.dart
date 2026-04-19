@@ -1,7 +1,6 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'chatScreen.dart';
 
 class UserChatListScreen extends StatefulWidget {
@@ -15,204 +14,266 @@ class UserChatListScreen extends StatefulWidget {
 
 class _UserChatListScreenState extends State<UserChatListScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  Map<String, String> sellerNamesCache = {}; // Cache for seller names
-  bool isFetchingSellerNames = false; // Prevent multiple fetches
-  Timer? refreshTimer;
+  Map<String, String> sellerNamesCache = {};
+  bool isFetchingSellerNames = false;
 
-  @override
-  void initState() {
-    super.initState();
-    // Set up a periodic refresh every 20 seconds
-    refreshTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
-      setState(() {}); // Trigger a rebuild of the screen
-    });
+  // Optimized Deletion
+  Future<void> _deleteChat(String chatId) async {
+    try {
+      await _firestore.collection('chats').doc(chatId).delete();
+    } catch (e) {
+      debugPrint('Error deleting chat: $e');
+    }
+  }
+  // 1. Define your professional color palette
+  final List<Color> _avatarPalette = [
+    Colors.blue.shade600,
+    Colors.green.shade600,
+    Colors.orange.shade600,
+    Colors.purple.shade600,
+    Colors.teal.shade600,
+    Colors.pink.shade600,
+    Colors.indigo.shade600,
+  ];
+
+  // 2. This helper picks a color based on the name so it stays consistent
+  Color _getConsistentColor(String name) {
+    if (name.isEmpty || name == "Loading...") return Colors.grey;
+    // Uses the name's unique hash to pick an index from the list
+    int index = name.hashCode.abs() % _avatarPalette.length;
+    return _avatarPalette[index];
   }
 
-  @override
-  void dispose() {
-    // Cancel the timer to avoid memory leaks
-    refreshTimer?.cancel();
-    super.dispose();
+  // 3. The updated UI widget
+  Widget _buildAvatar(String name) {
+    final Color profileColor = _getConsistentColor(name);
+
+    return CircleAvatar(
+      radius: 28,
+      backgroundColor: profileColor.withOpacity(0.1), // Soft background
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : "?",
+        style: TextStyle(
+          color: profileColor, // Strong text color
+          fontWeight: FontWeight.bold,
+          fontSize: 22,
+        ),
+      ),
+    );
   }
-  // Fetch all seller names based on the list of seller IDs
+
+  // Returns Future<bool?> to satisfy Dismissible requirement
+  Future<bool?> _confirmDelete(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('Remove Chat?'),
+        content: const Text('Do you want to delete this conversation?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _fetchAllSellerNames(List<String> sellerIds) async {
-    if (isFetchingSellerNames) return; // Prevent multiple fetch calls
+    if (isFetchingSellerNames || sellerIds.isEmpty) return;
     isFetchingSellerNames = true;
 
     try {
       final sellerDocs = await _firestore
-          .collection('saller')
+          .collection('saller') // Matches your 'saller' collection name
           .where(FieldPath.documentId, whereIn: sellerIds)
           .get();
 
       for (var doc in sellerDocs.docs) {
-        sellerNamesCache[doc.id] = doc['name'] ?? 'Unknown Seller';
+        sellerNamesCache[doc.id] = doc['name'] ?? 'Store';
       }
-      setState(() {}); // Update UI once names are fetched
+      if (mounted) setState(() {});
     } catch (e) {
-      print('Error fetching seller names: $e');
+      debugPrint('Error fetching names: $e');
     } finally {
       isFetchingSellerNames = false;
-    }
-  }
-
-  // Method to delete a chat
-  Future<void> _deleteChat(String chatId) async {
-    try {
-      await _firestore.collection('chats').doc(chatId).delete();
-      print('Chat deleted successfully');
-    } catch (e) {
-      print('Error deleting chat: $e');
-    }
-  }
-
-  // Show a confirmation dialog before deleting a chat
-  Future<void> _confirmDelete(String chatId) async {
-    bool? deleteConfirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Chat'),
-          content: const Text('Are you sure you want to delete this chat?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    // If the user confirms, delete the chat
-    if (deleteConfirmed ?? false) {
-      _deleteChat(chatId);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Your Chats'),
+        title: const Text('Inbox', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0.5,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _firestore.collection('chats')
             .where('userId', isEqualTo: widget.currentUserId)
+            .orderBy('lastUpdate', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: Colors.blue));
           }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return _buildEmptyState();
           }
 
           final chatDocs = snapshot.data!.docs;
 
-          if (chatDocs.isEmpty) {
-            return const Center(child: Text('You have no active chats.'));
-          }
-
-          // Extract sellerIds only once and fetch seller names
           final sellerIds = chatDocs
               .map((doc) => (doc.data() as Map<String, dynamic>)['sellerId'])
+              .where((id) => id != null)
               .toSet()
               .toList()
               .cast<String>();
 
-          // Fetch seller names only if not already cached
           if (sellerNamesCache.isEmpty && !isFetchingSellerNames) {
-            _fetchAllSellerNames(sellerIds); // Fetch seller names only once
+            _fetchAllSellerNames(sellerIds);
           }
 
-          return ListView.builder(
+          return ListView.separated(
             itemCount: chatDocs.length,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            separatorBuilder: (context, index) => const Divider(height: 1, indent: 80, endIndent: 20),
             itemBuilder: (context, index) {
               final chatData = chatDocs[index].data() as Map<String, dynamic>;
               final messages = chatData['messages'] as List? ?? [];
-              final lastMessage = messages.isNotEmpty ? messages.last : null;
+              final lastMsg = messages.isNotEmpty ? messages.last : null;
 
-              final lastMessageText = lastMessage?['text'] ?? "No messages yet";
-              final isLastMessageRead = lastMessage?['isRead'] ?? false;
-              final productName = chatData['productName'] ?? "No product name";
-              final sellerId = chatData['sellerId'] ?? "Unknown seller";
-              final productId = chatData['productId'];
-              final chatId = chatDocs[index].id;
-
-              // Use cached seller name or a placeholder
+              final sellerId = chatData['sellerId'] ?? "";
               final sellerName = sellerNamesCache[sellerId] ?? "Loading...";
 
-              // TextStyle based on the `isRead` status
-              final textStyle = TextStyle(
-                fontWeight: isLastMessageRead ? FontWeight.normal : FontWeight.bold,
-              );
+              // Unread logic: Last message exists AND it wasn't sent by me AND isRead is false
+              final isUnread = lastMsg != null &&
+                  lastMsg['sender'] != widget.currentUserId &&
+                  lastMsg['isRead'] == false;
 
-              return Column(
-                children: [
-                  ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.chat),
-                    ),
-                    title: Text(
-                      sellerName,
-                      style: TextStyle(
-                        fontWeight: (chatData['messages'] as List).isNotEmpty &&
-                            (chatData['messages'] as List).last['sender'] != widget.currentUserId &&
-                            !(chatData['messages'] as List).last['isRead']
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+              return Dismissible(
+                key: Key(chatDocs[index].id),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  color: Colors.red,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                ),
+                confirmDismiss: (direction) async {
+                  return await _confirmDelete(context);
+                },
+                onDismissed: (direction) => _deleteChat(chatDocs[index].id),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: _buildAvatar(sellerName),
+                  title: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          sellerName,
+                          style: TextStyle(
+                            fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    subtitle: Text(
-                      'Last message: $lastMessageText',
-
-                      style: TextStyle(
-                        fontWeight: (chatData['messages'] as List).isNotEmpty &&
-                            (chatData['messages'] as List).last['sender'] != widget.currentUserId &&
-                            !(chatData['messages'] as List).last['isRead']
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatScreen(
-                            currentUserId: widget.currentUserId,
-                            productId: productId,
-                            productName: productName,
-                            sellerId: sellerId,
+                      if (lastMsg != null)
+                        Text(
+                          _formatTime(lastMsg['timestamp']),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isUnread ? Colors.blue : Colors.grey,
+                            fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
-                      );
-                    },
-                    onLongPress: () {
-                      _confirmDelete(chatId); // Confirm deletion of the chat
-                    },
+                    ],
                   ),
-                  chatDocs.length>1?
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                    child: Container(
-                      height: 1,
-                      color: Colors.grey,
-                    ),
-                  ): Container()
-                ],
+                  subtitle: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          lastMsg?['text'] ?? "Start a conversation",
+                          style: TextStyle(
+                            color: isUnread ? Colors.black87 : Colors.grey[600],
+                            fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isUnread)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.all(5),
+                          decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+                        ),
+                    ],
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatScreen(
+                          currentUserId: widget.currentUserId,
+                          productId: chatData['productId'],
+                          productName: chatData['productName'],
+                          sellerId: sellerId,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
-
             },
           );
-
         },
       ),
     );
+  }
+
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.forum_outlined, size: 80, color: Colors.grey[200]),
+          const SizedBox(height: 16),
+          const Text("No messages yet", style: TextStyle(color: Colors.grey, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
+  // Same robust time logic to prevent "int is not subtype of Timestamp"
+  String _formatTime(dynamic timestamp) {
+    if (timestamp == null) return "Just now";
+
+    DateTime date;
+    if (timestamp is Timestamp) {
+      date = timestamp.toDate();
+    } else if (timestamp is int) {
+      date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    } else {
+      return "";
+    }
+
+    final now = DateTime.now();
+    if (date.day == now.day && date.month == now.month && date.year == now.year) {
+      return DateFormat.jm().format(date);
+    }
+    return DateFormat.MMMd().format(date);
   }
 }

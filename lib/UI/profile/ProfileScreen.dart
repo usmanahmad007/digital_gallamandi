@@ -4,11 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:zrai_mart/Notification/Notification.dart';
 import 'package:zrai_mart/UI/profile/EditProfileScreen.dart';
 import 'package:zrai_mart/UI/auth/signInScreen.dart';
-import 'package:zrai_mart/saller%20center/profile/HelpCenterScreen.dart';
-import 'package:zrai_mart/saller%20center/profile/LanguageSelectionScreen.dart';
-
+import 'package:zrai_mart/saller center/profile/HelpCenterScreen.dart';
+import 'package:zrai_mart/saller center/profile/LanguageSelectionScreen.dart';
+import '../../app_colors.dart';
 import '../../saller center/profile/PrivacyPolicyScreen.dart';
-import '../customGestureDetector/CustomGestureDetector.dart';
 
 class Profilescreen extends StatefulWidget {
   const Profilescreen({super.key});
@@ -18,14 +17,12 @@ class Profilescreen extends StatefulWidget {
 }
 
 class _ProfilescreenState extends State<Profilescreen> {
-  bool light = false;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  String _name = 'Loading...';
-  String _email = 'Loading...';
-  var profileImageUrl;
-
+  String _name = '...';
+  String _email = '...';
+  String? profileImageUrl;
 
   @override
   void initState() {
@@ -35,195 +32,205 @@ class _ProfilescreenState extends State<Profilescreen> {
 
   Future<void> _fetchUserData() async {
     User? user = _auth.currentUser;
-
     if (user != null) {
       try {
         DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
-
         if (userDoc.exists) {
-          print(user.uid);
           setState(() {
-            _name = userDoc['name'] ?? 'No name';
-            _email = userDoc['email'] ?? 'No email';
-            profileImageUrl=userDoc['profileImage'];
-          });
-        } else {
-          print(user.uid);
-
-          setState(() {
-            _name = 'No name';
-            _email = 'No email';
-            profileImageUrl=null;
+            _name = userDoc['name'] ?? 'User';
+            _email = userDoc['email'] ?? '';
+            profileImageUrl = userDoc['profileImage'];
           });
         }
       } catch (e) {
-        print('Error fetching user data: $e');
-        setState(() {
-          _name = 'Error fetching name';
-          _email = 'Error fetching email';
-          profileImageUrl=null;
-        });
+        debugPrint('Error: $e');
       }
     }
   }
 
+  @override
+  Widget build(BuildContext context) {
+    const primaryColor = AppColors.primaryGreen;
 
-  void handleNotificationTap() {
-    Navigator.push(context, MaterialPageRoute(builder: (context)=>NotificationScreen(userId: FirebaseAuth.instance.currentUser!.uid, isSeller: false,)));
+    return Scaffold(
+      backgroundColor: const Color(0xffF8F9FD),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // 1. Modern Header & Profile Card
+            Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                _buildHeaderGradient(primaryColor),
+                Positioned(
+                  top: 100,
+                  child: _buildProfileCard(primaryColor),
+                ),
+              ],
+            ),
+            const SizedBox(height: 120), // Spacer for the floating card
+
+            // 2. Settings Sections
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionLabel("Account Settings"),
+                  _buildSettingsGroup([
+                    _buildSettingsTile(Icons.person_outline, "Edit Profile", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+                    }),
+                    _buildSettingsTile(Icons.notifications_none_outlined, "Notifications", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => UniversalNotificationScreen(currentUserId: _auth.currentUser!.uid, userRole: 'customer',)));
+                    }),
+                  ]),
+
+                  const SizedBox(height: 25),
+                  _buildSectionLabel("General"),
+                  _buildSettingsGroup([
+                    _buildSettingsTile(Icons.language_outlined, "Language", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const LanguageSelectionScreen()));
+                    }),
+                    _buildSettingsTile(Icons.shield_outlined, "Privacy Policy", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()));
+                    }),
+                    _buildSettingsTile(Icons.help_outline, "Help Center", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterScreen()));
+                    }),
+                  ]),
+
+                  const SizedBox(height: 30),
+                  // 3. Logout Button
+                  _buildLogoutButton(),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-
-  void handleLanguageTap() {
-    Navigator.push(context, MaterialPageRoute(builder: (context)=>const LanguageSelectionScreen()));
-
+  Widget _buildHeaderGradient(Color primary) {
+    return Container(
+      height: 200,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [primary, const Color(0xFF4facfe)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
+      ),
+      child: const SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(top: 20),
+          child: Text(
+            "My Profile",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
   }
 
-  void handlePrivacyPolicyTap() {
-    Navigator.push(context, MaterialPageRoute(builder: (context)=>const PrivacyPolicyScreen()));
+  Widget _buildProfileCard(Color primary) {
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.85,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 45,
+            backgroundColor: primary.withOpacity(0.1),
+            backgroundImage: profileImageUrl != null
+                ? NetworkImage(profileImageUrl!)
+                : const AssetImage('assets/img_2.png') as ImageProvider,
+          ),
+          const SizedBox(height: 12),
+          Text(_name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(_email, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        ],
+      ),
+    );
   }
 
-  void handleHelpCenterTap() {
-    Navigator.push(context, MaterialPageRoute(builder:(context)=>const HelpCenterScreen()));
+  Widget _buildSectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 5, bottom: 10),
+      child: Text(text, style: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.bold, fontSize: 16)),
+    );
   }
 
+  Widget _buildSettingsGroup(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+      ),
+      child: Column(children: children),
+    );
+  }
 
+  Widget _buildSettingsTile(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: const Color(0xffF0F3F6), borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: AppColors.primaryGreen, size: 20),
+      ),
+      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+    );
+  }
 
-  void handleLogoutTap() {
-    print('Logout tapped');
-    _signOut();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const Signinscreen()),
-          (Route<dynamic> route) => false,
+  Widget _buildLogoutButton() {
+    return InkWell(
+      onTap: () => _signOut(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.red.withOpacity(0.1)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout_rounded, color: Colors.red, size: 20),
+            SizedBox(width: 10),
+            Text("Logout", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+      ),
     );
   }
 
   Future<void> _signOut() async {
     try {
       await _auth.signOut();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Signed out successfully'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const Signinscreen()),
+            (route) => false,
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error signing out: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
+      debugPrint("Error signing out: $e");
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Profile"),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 30),
-            CircleAvatar(
-              radius: 60,
-              backgroundImage: profileImageUrl != null
-                  ? NetworkImage(profileImageUrl!)
-                  : const AssetImage('assets/img_2.png') as ImageProvider,
-            ),
-            Text(
-              _name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            Text(_email),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              height: 1,
-              color: Colors.grey.withOpacity(0.3),
-            ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const EditProfileScreen()),
-                );
-              },
-              child: const ListTile(
-                leading: Icon(Icons.person),
-                trailing: Icon(
-                  Icons.keyboard_arrow_right,
-                ),
-                title: Text(
-                  'Edit Profile',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            CustomGestureDetector(
-              leadingIcon: Icons.notifications_active,
-              title: 'Notification',
-              trailingIcon: Icons.keyboard_arrow_right,
-              onTap: handleNotificationTap,
-            ),
-            CustomGestureDetector(
-              leadingIcon: Icons.language,
-              title: 'Language',
-              trailingIcon: Icons.keyboard_arrow_right,
-              onTap: handleLanguageTap,
-            ),
-            /*ListTile(
-              leading: Icon(Icons.remove_red_eye_outlined),
-              trailing: Switch(
-                value: light,
-                activeColor: Colors.green,
-                onChanged: (bool value) {
-                  setState(() {
-                    light = value;
-                  });
-                },
-              ),
-              title: Text(
-                'Dark Mode',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            ),*/
-            CustomGestureDetector(
-              leadingIcon: Icons.lock_outline,
-              title: 'Privacy Policy',
-              trailingIcon: Icons.keyboard_arrow_right,
-              onTap: handlePrivacyPolicyTap,
-            ),
-            CustomGestureDetector(
-              leadingIcon: Icons.help_center_outlined,
-              title: 'Help Center',
-              trailingIcon: Icons.keyboard_arrow_right,
-              onTap: handleHelpCenterTap,
-            ),
-
-            CustomGestureDetector(
-              leadingIcon: Icons.exit_to_app,
-              leadingIconColor: Colors.red,
-              title: 'Logout',
-              titleColor: Colors.red,
-              trailingIcon: Icons.keyboard_arrow_right,
-              onTap: handleLogoutTap,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

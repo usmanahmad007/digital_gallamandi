@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -17,542 +16,499 @@ class SellerOrderScreen extends StatefulWidget {
 class _SellerOrderScreenState extends State<SellerOrderScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final List<String> _reasons = [
-    'Product is not available',
-    'Issue with delivery',
-    'Pricing error',
-    'Stock mismatch',
-    'Other',
+    // --- Inventory & Pricing ---
+    'Product out of stock',
+    'Stock mismatch / Inventory error',
+    'Pricing or listing error',
+    'Product discontinued',
+
+    // --- Shipping & Logistics ---
+    'Unable to ship to customer location',
+    'Delivery partner unavailable',
+    'Logistics / Courier delay',
+    'Shipping address unreachable',
+    'Package damaged during transit',
+
+    // --- Quality & Condition ---
+    'Defective or damaged product',
+    'Wrong item sent to customer',
+    'Product quality not as described',
+    'Expired or near-expiry product',
+
+    // --- Customer / External ---
+    'Customer requested cancellation',
+    'Customer requested return',
+    'Customer unreachable for verification',
+    'Duplicate order placed by customer',
+
+    // --- Other ---
+    'Technical system error',
+    'Fraudulent order suspected',
+    'Other (Specify in notes)',
   ];
   String? _selectedReason;
-  Future<String?> uploadReceiptImage() async {
-    try{
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
-    if (pickedFile == null) return null; // No image selected
+  // --- LOGIC & FIREBASE FUNCTIONS ---
 
-    File file = File(pickedFile.path);
-    String fileName = "receipt_${DateTime.now().millisecondsSinceEpoch}.jpg";
-    Reference storageRef = FirebaseStorage.instance.ref().child("receipts/$fileName");
+  void _showLoader() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.green),
+      ),
+    );
+  }
 
+  Future<bool> _uploadAndSaveReceipt(String orderId) async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile == null) return false;
+
+      _showLoader();
+      File file = File(pickedFile.path);
+      String fileName = "receipt_${DateTime.now().millisecondsSinceEpoch}.jpg";
+      Reference storageRef = FirebaseStorage.instance.ref().child("receipts/$fileName");
 
       UploadTask uploadTask = storageRef.putFile(file);
       TaskSnapshot snapshot = await uploadTask;
       String downloadUrl = await snapshot.ref.getDownloadURL();
-      return downloadUrl; // Return the uploaded image URL
-    } catch (e) {
-      print("Error uploading image: $e");
-      return "pending";
-    }
-  }
-
-  Future<void> _updateOrderImageStatus(
-      String orderId,) async {
-    try {
-      String? imageUrl="pending";
-       imageUrl= await uploadReceiptImage();
-
-       if(imageUrl==null){
-         setState(() {
-           imageUrl="pending";
-         });
-       }
 
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(orderId)
-          .update({'receiptImage': imageUrl,});
+          .update({'receiptImage': downloadUrl});
 
-    } catch (error) {
+      Navigator.pop(context);
+      return true;
+    } catch (e) {
+      if (Navigator.canPop(context)) Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update image.')),
+        const SnackBar(content: Text('Upload failed. Please check your connection.')),
       );
+      return false;
     }
-  }Future<void> _updateOrderStatus(
-      String orderId, String newStatus, String reason) async {
+  }
+  Future<void> _sendNotification({
+    String? userId,        // Customer ID
+    String? sellerId,      // Seller ID
+    bool isAdmin = false,  // If true, notification is for Admin
+    required String title,
+    required String body,
+    required String type,      // e.g., 'order', 'store', 'product', 'system'
+    required String category,  // e.g., 'cancelled', 'approved', 'deleted', 'restricted'
+    String? actionId,          // The ID of the Order, Product, or Store
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'userId': userId,
+        'sellerId': sellerId,
+        'isAdmin': isAdmin,
+        'senderId': FirebaseAuth.instance.currentUser!.uid,
+        'title': title,
+        'body': body,
+        'type': type,
+        'category': category,
+        'actionId': actionId ?? "",
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false, // Simplified: Each notification doc is specific to one recipient
+      });
+    } catch (e) {
+      debugPrint("Notification Error: $e");
+    }
+  }
+  /*Future<void> _sendNotification({
+    String? userId,      // The Customer's ID (Optional)
+    String? sellerId,    // The Seller's ID (Optional)
+    required String title,
+    required String body,
+    required String type,
+    String? orderId,     // Added this so the user can tap to open the order
+    String? productId,   // Added this for the detail screen
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        if (userId != null) 'userId': userId,
+        if (sellerId != null) 'sellerId': sellerId,
+        'senderId': _auth.currentUser!.uid,
+        'title': title,
+        'body': body,
+        'type': type,
+        'orderId': orderId ?? "",
+        'productId': productId ?? "",
+        'timestamp': FieldValue.serverTimestamp(),
+
+        // Matches the logic in your Notification Screen
+        'userIsRead': false,
+        'sellerIsRead': false,
+      });
+    } catch (e) {
+      debugPrint("Notification Error: $e");
+    }
+  }*/
+
+  Future<void> _updateOrderStatus(String orderId, String newStatus, String reason) async {
     try {
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(orderId)
           .update({'status': newStatus, 'reason': reason});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order status updated to $newStatus.')),
-      );
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update order status.')),
-      );
-    }
-  }
 
-  Future<void> _showStatusUpdateDialog(
-      String orderId, String currentStatus, productId, int quantity,String receiptImage) async {
-    String newStatus;
-    if (currentStatus == 'pending') {
-      newStatus = 'in process';
-    } else if (currentStatus == 'in process') {
-      newStatus = 'completed';
-    } else if (currentStatus == 'cancelled') {
-      newStatus = 'cancelled';
-    } else {
-      return; // If status is already 'completed', no further updates are allowed
-    }
+      // Fetch order details to notify the customer
+      final orderDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
 
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Update Order Status'),
-          content: Text('Do you want to mark this order as $newStatus?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-              },
-              child: const Text('No', style: TextStyle(color: Colors.black)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              onPressed: () {
-                if (newStatus == 'cancelled') {
-                  print("Cancelled");
-                  Navigator.of(context).pop(); // Close the dialog
-                  _showCancelDialog(orderId); // Update status to newStatus
-                } else if (newStatus == 'completed') {
+      if (orderDoc.exists) {
+        final data = orderDoc.data() as Map<String, dynamic>;
+        String customerId = data['userId']; // Ensure this matches your field name in 'orders'
+        String productTitle = data['title'];
+        String productId = data['productId']; // Needed for notification navigation
 
-                  if(receiptImage=="pending"){
-                    showDialog(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            title: const Text("Upload Shipment Receipt"),
-                            content: const Text(
-                                "Please upload the shipment receipt to mark the order as Complete"),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop(); // Close the dialog
-                                  Navigator.of(context).pop();
-                                },
-                                child: const Text('Cancel',
-                                    style: TextStyle(color: Colors.black)),
-                              ),
-                              ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green),
-                                  onPressed: () {
-                                    Navigator.of(context).pop(); // Close the dialog
-                                    Navigator.of(context).pop(); // Close the dialog
+        // Build notification message
+        String message = "Your order for '$productTitle' is now $newStatus.";
+        if ((newStatus == 'cancelled' || newStatus == 'returned') && reason != 'none') {
+          message += " Reason: $reason";
+        }
 
-                                    _updateOrderImageStatus(orderId);
-                                  },
-                                  child: const Text('upload image',
-                                      style:
-                                      TextStyle(color: Colors.white)))
-                            ],
-                          );
-                        });
-                  } else {
-                       Navigator.of(context).pop(); // Close the dialog
-                       handleOrder(productId,quantity,orderId,newStatus);
-                  }
-
-
-                } else {
-                  Navigator.of(context).pop(); // Close the dialog
-                  _updateOrderStatus(orderId, newStatus, 'none');
-                }
-              },
-              child: Text('Yes - $newStatus',
-                  style: const TextStyle(color: Colors.white)),
-            ),
-          ],
+        // Using the updated notification function
+        await _sendNotification(
+          userId: customerId, // Specifically targeting the customer
+          title: "Order Update: ${newStatus.toUpperCase()}",
+          body: message,
+          type: 'order',
+          actionId: orderId,
+          category: newStatus,
         );
-      },
-    );
-  }
+      }
 
-  void handleOrderBalance(String productId, int soldQuantity) async {
-    await updateSellerBalance(productId, soldQuantity);
+
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Order status updated to $newStatus.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update status.')),
+        );
+      }
+    }
   }
 
   Future<void> updateSellerBalance(String productId, int soldQuantity) async {
     try {
       final firestore = FirebaseFirestore.instance;
-
-      // Fetch the product document
-      final productRef = firestore.collection('products').doc(productId);
-      final productSnapshot = await productRef.get();
-
+      final productSnapshot = await firestore.collection('products').doc(productId).get();
       if (productSnapshot.exists) {
-        print("GIFT1");
-        // Get sellerId, price, and calculate total revenue for sold products
         final String sellerId = productSnapshot['sellerId'];
         final double pricePerUnit = double.parse(productSnapshot['price']);
         final double revenue = pricePerUnit * soldQuantity;
 
-        // Reference to the seller's document
         final sellerRef = firestore.collection('saller').doc(sellerId);
-
-        // Fetch the seller's current balance
         final sellerSnapshot = await sellerRef.get();
-
         if (sellerSnapshot.exists) {
-          final double currentBalance =
-              double.parse(sellerSnapshot['balance'].toString());
-
-          // Update the seller's balance
-          final double newBalance = currentBalance + revenue;
-          await sellerRef.update({'balance': newBalance});
-
-          print('Seller balance updated successfully!');
-        } else {
-          print('Seller with ID $sellerId does not exist!');
+          final double currentBalance = double.parse(sellerSnapshot['balance'].toString());
+          await sellerRef.update({'balance': currentBalance + revenue});
         }
-      } else {
-        print('Product with ID $productId does not exist!');
       }
     } catch (e) {
-      print('Error updating seller balance: $e');
+      debugPrint('Balance Error: $e');
     }
   }
 
-  void handleOrder(String productId, int soldQuantity, String orderId,
-      String newStatus) async {
-    await decrementProductQuantity(productId, soldQuantity, orderId, newStatus);
-  }
-
-  Future<void> decrementProductQuantity(String productId, int soldQuantity,
-      String orderId, String newStatus) async {
+  // Updated to handle both Shipped and Completion
+  Future<void> handleOrderProgression(String productId, int soldQuantity, String orderId, String targetStatus) async {
     try {
-      // Reference to the Firestore collection where the products are stored
-      final productRef =
-          FirebaseFirestore.instance.collection('products').doc(productId);
-
-      // Fetch the current quantity of the product
+      final productRef = FirebaseFirestore.instance.collection('products').doc(productId);
       DocumentSnapshot productSnapshot = await productRef.get();
 
       if (productSnapshot.exists) {
-        int currentQuantity = int.parse(productSnapshot['quantity']);
-
-        // Ensure the quantity does not go below 0
-        int newQuantity = currentQuantity - soldQuantity;
-        if (newQuantity < 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You do not have enough products quantity'),
-            ),
-          );
-        } else {
-          _updateOrderStatus(orderId, newStatus, 'none');
-
-          handleOrderBalance(productId, soldQuantity);
+        if (targetStatus == 'shipped') {
+          int currentQuantity = int.parse(productSnapshot['quantity']);
+          if (currentQuantity < soldQuantity) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insufficient stock!')));
+            return;
+          }
+          await updateSellerBalance(productId, soldQuantity);
+          await productRef.update({'quantity': (currentQuantity - soldQuantity).toString()});
         }
-
-        // Update the product's quantity in Firestore
-        await productRef.update({'quantity': newQuantity.toString()});
-
-        print('Product quantity updated successfully!');
-      } else {
-        print('Product with ID $productId does not exist!');
+        await _updateOrderStatus(orderId, targetStatus, 'none');
       }
     } catch (e) {
-      print('Error decrementing product quantity: $e');
+      debugPrint('Progression Error: $e');
     }
+  }
+
+  // --- DIALOGS ---
+
+  void _showStatusUpdateDialog(String orderId, String currentStatus, String productId, int quantity, String receiptImage) {
+    String newStatus = '';
+    if (currentStatus == 'pending') newStatus = 'in process';
+    else if (currentStatus == 'in process') newStatus = 'shipped';
+    else if (currentStatus == 'shipped') newStatus = 'completed';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Update Status'),
+        content: Text('Mark this order as $newStatus?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('No', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () async {
+              Navigator.pop(context);
+              if (newStatus == 'shipped' && receiptImage == "pending") {
+                _showUploadRequirementDialog(orderId, productId, quantity, 'shipped');
+              } else {
+                handleOrderProgression(productId, quantity, orderId, newStatus);
+              }
+            },
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUploadRequirementDialog(String orderId, String productId, int quantity, String targetStatus) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Upload Receipt"),
+        content: const Text("A shipment receipt is required to mark as Shipped."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () async {
+              Navigator.pop(context);
+              bool success = await _uploadAndSaveReceipt(orderId);
+              if (success) {
+                handleOrderProgression(productId, quantity, orderId, targetStatus);
+              }
+            },
+            child: const Text('Upload & Continue', style: TextStyle(color: Colors.white)),
+          )
+        ],
+      ),
+    );
   }
 
   void _showCancelDialog(String orderId) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Cancel Order'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: 'Reason for Cancellation',
-                  labelStyle: const TextStyle(color: Colors.grey),
-                  filled: true,
-                  fillColor: Colors.green.withOpacity(0.1),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.green),
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 15, horizontal: 5),
-                ),
-                initialValue: _selectedReason,
-                items: _reasons.map((reason) {
-                  return DropdownMenuItem<String>(
-                    value: reason,
-                    child: Text(reason),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedReason = value;
-                  });
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please select a reason';
-                  }
-                  return null;
-                },
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Cancel Order'),
+        content: DropdownButtonFormField<String>(
+          decoration: InputDecoration(labelText: 'Reason', border: OutlineInputBorder(borderRadius: BorderRadius.circular(15))),
+          items: _reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+          onChanged: (v) => setState(() => _selectedReason = v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Back')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              if (_selectedReason != null) {
+                _updateOrderStatus(orderId, 'cancelled', _selectedReason!);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Cancel Order', style: TextStyle(color: Colors.white)),
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close the dialog
-              },
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.black),
-              ),
+        ],
+      ),
+    );
+  }
+
+  void _showReturnDialog(String orderId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Mark as Returned'),
+        // --- ADD THESE TWO LINES ---
+        actionsOverflowDirection: VerticalDirection.down,
+        actionsAlignment: MainAxisAlignment.end,
+        // ---------------------------
+        content: DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+              labelText: 'Reason for Return',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15))
+          ),
+          // Use a scrollable list if reasons are very long
+          isExpanded: true,
+          items: _reasons.map((r) => DropdownMenuItem(
+              value: r,
+              child: Text(r, overflow: TextOverflow.ellipsis)
+          )).toList(),
+          onChanged: (v) => setState(() => _selectedReason = v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Back', style: TextStyle(color: Colors.grey))
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
             ),
-            Container(
-              decoration: BoxDecoration(
-                  color: Colors.green, borderRadius: BorderRadius.circular(25)),
-              child: TextButton(
-                onPressed: () {
-                  if (_selectedReason != null) {
-                    _updateOrderStatus(
-                        orderId, 'cancelled', _selectedReason.toString());
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Order canceled: $_selectedReason'),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please select a reason'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text(
-                  'Submit',
-                  style: TextStyle(color: Colors.black),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+            onPressed: () {
+              if (_selectedReason != null) {
+                _updateOrderStatus(orderId, 'returned', _selectedReason!);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Mark Returned', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: const Text('Seller Orders'),
+        title: const Text('Orders Management', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('orders')
-            .where('sellerId', isEqualTo: _auth.currentUser!.uid)
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('orders').where('sellerId', isEqualTo: _auth.currentUser!.uid).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('Error loading orders.'));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No orders found.'));
-          }
-
-          final orders = snapshot.data!.docs;
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildEmptyState();
 
           return ListView.builder(
-            itemCount: orders.length,
+            padding: const EdgeInsets.all(16),
+            itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
-              final order = orders[index];
-              final orderData = order.data() as Map<String, dynamic>;
-              final product =
-                  orderData; // Assuming only one product per order as per your reference
-              final totalPrice = orderData['totalPrice'];
-              final orderDate = (orderData['orderDate'] as Timestamp).toDate();
-              final status = orderData['status'];
-              final productId = orderData['productId'];
-              final orderId = orderData['orderId'];
-              final receiptImage = orderData['receiptImage'];
-
-              return Card(
-                elevation: 3,
-                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.green.shade100, Colors.yellow],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Order ID: $orderId',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        const SizedBox(height: 5),
-                        Text('Order Date: ${orderDate.toLocal()}',
-                            style: const TextStyle(fontSize: 14)),
-                        Text(
-                          'Total Price: PKR${totalPrice.toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        Text(
-                          'Status: $status',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: status == 'completed'
-                                ? Colors.green
-                                : (status == 'cancelled'
-                                    ? Colors.red
-                                    : Colors.grey),
-                          ),
-                        ),
-                        if (status == 'cancelled')
-                          Text(
-                            'Reason: ${orderData['reason']}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: status == 'cancelled'
-                                  ? Colors.red
-                                  : Colors.black,
-                            ),
-                          ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Product:',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        const SizedBox(height: 5),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 5),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Colors.green.shade400, Colors.yellow],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                              ),
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: product['image'] != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        product['image'],
-                                        width: 50,
-                                        height: 50,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : const Icon(Icons.image_not_supported),
-                              title: Text(
-                                product['title'],
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                              subtitle: Text(
-                                'Quantity: ${product['quantity']}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              trailing: Text(
-                                'PKR${product['price'].toStringAsFixed(2)}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              onTap: () {
-                                // Navigate to ProductDetailsScreen
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        SellerProductDetailsScreen(
-                                            product: product),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            if (status == 'pending' || status == 'in process')
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: ElevatedButton(
-                                  onPressed: () => _showStatusUpdateDialog(
-                                      order.id,
-                                      "cancelled",
-                                      productId,
-                                      product['quantity'],receiptImage),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                  ),
-                                  child: const Text(
-                                    'Cancel Order',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(width: 10),
-                            (status != 'completed' && status != 'cancelled')
-                                ? Align(
-                                    alignment: Alignment.centerRight,
-                                    child: ElevatedButton(
-                                      onPressed: () => _showStatusUpdateDialog(
-                                          order.id,
-                                          status,
-                                          productId,
-                                          product['quantity'],receiptImage),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: status != 'cancelled'
-                                            ? Colors.green
-                                            : Colors.grey,
-                                      ),
-                                      child: Text(
-                                        status == 'pending'
-                                            ? 'Start Processing'
-                                            : 'Complete Order',
-                                        style: const TextStyle(
-                                            color: Colors.white),
-                                      ),
-                                    ),
-                                  )
-                                : Container(),
-                          ],
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-              );
+              final doc = snapshot.data!.docs[index];
+              final data = doc.data() as Map<String, dynamic>;
+              return _buildOrderCard(data, doc.id);
             },
           );
         },
       ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return const Center(child: Text("No orders found", style: TextStyle(color: Colors.grey)));
+  }
+
+  Widget _buildOrderCard(Map<String, dynamic> data, String docId) {
+    final status = data['status'].toString().toLowerCase();
+    final orderDate = (data['orderDate'] as Timestamp).toDate();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Order #${data['orderId'].toString().toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("${orderDate.day}/${orderDate.month}/${orderDate.year}", style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                    _buildStatusChip(status),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => SellerProductDetailsScreen(product: data))),
+            leading: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(data['image'], width: 60, height: 60, fit: BoxFit.cover)),
+            title: Text(data['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            subtitle: Text("Qty: ${data['quantity']} | PKR ${data['totalPrice']}"),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+          ),
+
+          if (status == 'cancelled' || status == 'returned')
+            Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                color: status == 'cancelled' ? Colors.red.shade50 : Colors.orange.shade50,
+                child: Text("Reason: ${data['reason']}", style: TextStyle(color: status == 'cancelled' ? Colors.red.shade700 : Colors.orange.shade900, fontSize: 12))
+            ),
+
+          // --- LOGIC UPDATE: ACTIONS SECTION ---
+          // Hide all actions if status is 'completed', 'cancelled', or 'returned'
+          if (status != 'completed' && status != 'cancelled' && status != 'returned')
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  // Left Button Logic
+                  if (status == 'pending' || status == 'in process')
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        onPressed: () => _showCancelDialog(docId),
+                        child: const Text("Cancel"),
+                      ),
+                    )
+                  else if (status == 'shipped')
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.orange, side: const BorderSide(color: Colors.orange), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        onPressed: () => _showReturnDialog(docId),
+                        child: const Text("Return Order"),
+                      ),
+                    ),
+
+                  const SizedBox(width: 12),
+
+                  // Right Button (Next Step Logic)
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      onPressed: () => _showStatusUpdateDialog(docId, status, data['productId'], data['quantity'], data['receiptImage'] ?? "pending"),
+                      child: Text(
+                          status == 'pending' ? "Start Process" :
+                          status == 'in process' ? "Mark Shipped" : "Complete Order",
+                          style: const TextStyle(color: Colors.white,fontSize: 13)
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String status) {
+    Color color;
+    switch (status) {
+      case 'completed': color = Colors.green; break;
+      case 'shipped': color = Colors.purple; break;
+      case 'cancelled': color = Colors.red; break;
+      case 'in process': color = Colors.orange; break;
+      case 'returned': color = Colors.orange.shade900; break;
+      default: color = Colors.blue;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
+      child: Text(status.toUpperCase(), style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
     );
   }
 }

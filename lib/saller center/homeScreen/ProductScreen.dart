@@ -53,7 +53,8 @@ class _ProductScreenState extends State<ProductScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => Productfullview(
+                      builder: (context) => HSProductfullview(
+                        sellerId:product['sellerId'],
                         imageUrls: product['imageUrl'],
                         productName: product['title'],
                         shortDescription: product['description'],

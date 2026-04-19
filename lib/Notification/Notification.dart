@@ -1,89 +1,75 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../app_colors.dart';
+import 'NotificationDetailScreen.dart';
 
-import 'OrderDetailsScreen.dart';
+class UniversalNotificationScreen extends StatelessWidget {
+  final String currentUserId;
+  final String userRole; // 'customer', 'seller', or 'admin'
 
-class NotificationScreen extends StatefulWidget {
-  final String userId; // ID of the logged-in user
-  final bool isSeller; // Determines if the user is a seller or not
-
-  const NotificationScreen({super.key, required this.userId, required this.isSeller});
-
-  @override
-  State<NotificationScreen> createState() => _NotificationScreenState();
-}
-
-class _NotificationScreenState extends State<NotificationScreen> {
-  Future<void> markNotificationAsRead(String notificationId) async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      await firestore.collection('notifications').doc(notificationId).update({
-        widget.isSeller ? 'sellerIsRead' : 'userIsRead': true,
-      });
-    } catch (e) {
-      print('Error marking notification as read: $e');
-    }
-  }
+  const UniversalNotificationScreen({
+    super.key,
+    required this.currentUserId,
+    required this.userRole
+  });
 
   @override
   Widget build(BuildContext context) {
-    print("${widget.userId}///");
+    Query query = FirebaseFirestore.instance.collection('notifications');
 
-    final firestore = FirebaseFirestore.instance;
+    // Filter based on who is looking at the screen
+    if (userRole == 'admin') {
+      query = query.where('isAdmin', isEqualTo: true);
+    } else if (userRole == 'seller') {
+      query = query.where('sellerId', isEqualTo: currentUserId);
+    } else {
+      query = query.where('userId', isEqualTo: currentUserId);
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text( 'Notifications'),
+        title: const Text("Notifications", style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: firestore
-            .collection('notifications')
-            .where(widget.isSeller ? 'sellerId' : 'userId', isEqualTo: widget.userId)
-            .orderBy('timestamp', descending: true)
-            .snapshots(),
+        stream: query.orderBy('timestamp', descending: true).snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          final notifications = snapshot.data!.docs;
-
-          if (notifications.isEmpty) {
-            return const Center(child: Text('No notifications available.'));
-          }
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) return const Center(child: Text("No notifications found"));
 
           return ListView.builder(
-            itemCount: notifications.length,
+            itemCount: docs.length,
+            padding: const EdgeInsets.all(12),
             itemBuilder: (context, index) {
-              final notification = notifications[index];
-              final notificationData = notification.data() as Map<String, dynamic>;
-              final isRead = notificationData[widget.isSeller ? 'sellerIsRead' : 'userIsRead'] ?? false;
+              final data = docs[index].data() as Map<String, dynamic>;
+              final String docId = docs[index].id;
+              final bool isRead = data['isRead'] ?? false;
+              final String type = data['type'] ?? 'system';
+              final String category = data['category'] ?? '';
 
               return Card(
-                elevation: 3,
-                color: isRead ? Colors.grey[300] : Colors.white,
+                elevation: isRead ? 0 : 2,
+                color: isRead ? Colors.grey[50] : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 child: ListTile(
-                  title: const Text("Order has been Cancelled By Admin"),
-                  subtitle: Text('Order ID: ${notificationData['orderId']}'),
-                  trailing: Icon(
-                    isRead ? Icons.check_circle : Icons.circle,
-                    color: isRead ? Colors.green : Colors.grey,
-                  ),
-                  onTap: () async {
-                    // Mark notification as read
-                    await markNotificationAsRead(notification.id);
-
-                    // Navigate to Order Details Screen
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => OrderDetailsScreen(
-                          orderId: notificationData['orderId'],
-                          productId: notificationData['productId'],
-                        ),
+                  leading: _buildLeadingIcon(type, category),
+                  title: Text(data['title'], style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(data['body']),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatTimestamp(data['timestamp']),
+                        style: const TextStyle(fontSize: 10, color: Colors.grey),
                       ),
-                    );
-                  },
+                    ],
+                  ),
+                  trailing: !isRead ? const CircleAvatar(radius: 4, backgroundColor: Colors.green) : null,
+                  onTap: () => _handleTap(context, docId, data),
                 ),
               );
             },
@@ -91,5 +77,62 @@ class _NotificationScreenState extends State<NotificationScreen> {
         },
       ),
     );
+  }
+
+  Widget _buildLeadingIcon(String type, String category) {
+    IconData icon;
+    Color color;
+
+    switch (type) {
+      case 'order':
+        icon = Icons.shopping_bag_outlined;
+        color = Colors.blue;
+        break;
+      case 'store':
+        icon = Icons.storefront;
+        color = category == 'restricted' ? Colors.red : Colors.orange;
+        break;
+      case 'product':
+        icon = Icons.inventory_2_outlined;
+        color = Colors.teal;
+        break;
+      default:
+        icon = Icons.notifications_active_outlined;
+        color = Colors.purple;
+    }
+
+    return CircleAvatar(
+      backgroundColor: color.withOpacity(0.1),
+      child: Icon(icon, color: color, size: 20),
+    );
+  }
+
+  void _handleTap(BuildContext context, String docId, Map<String, dynamic> data) async {
+    // 1. Mark as Read in Firestore
+    await FirebaseFirestore.instance.collection('notifications').doc(docId).update({'isRead': true});
+
+    // 2. Extract data for navigation
+    final String type = data['type'] ?? 'system';
+    final String actionId = data['actionId'] ?? '';
+
+    // 3. Generic Navigation to a Detail View
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => NotificationDetailScreen(
+            type: type,
+            actionId: actionId,
+            notificationData: data,
+          ),
+        ),
+      );
+    }
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return "";
+    DateTime date = (timestamp as Timestamp).toDate();
+    return "${date.day}/${date.month} ${date.hour}:${date.minute}";
   }
 }

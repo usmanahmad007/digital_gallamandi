@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../app_colors.dart';
 
 class SellerChatScreen extends StatefulWidget {
   final String sellerId;
@@ -23,278 +26,201 @@ class _SellerChatScreenState extends State<SellerChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late String chatId;
-  String userName = '';
+  String userName = 'Loading...';
 
   @override
   void initState() {
     super.initState();
     chatId = 'chat_${widget.userId}_${widget.sellerId}_${widget.productId}';
     _fetchUserName();
-    CheckMarkedMessage();
-    _sendMessage("Anyone Available to chat?".toString());
+    _markMessagesAsRead();
   }
 
   Future<void> _fetchUserName() async {
     try {
-      DocumentSnapshot userDoc =
-      await _firestore.collection('users').doc(widget.userId).get();
-      if (userDoc.exists) {
-        setState(() {
-          userName = userDoc['name'] ?? 'Unknown User';
-        });
-      } else {
-        print('User not found');
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(widget.userId).get();
+      if (userDoc.exists && mounted) {
+        setState(() => userName = userDoc['name'] ?? 'Customer');
       }
     } catch (e) {
-      print('Error fetching user name: $e');
+      debugPrint('Error: $e');
     }
   }
 
-  Future<Map<String, dynamic>?> getProductById(String productId) async {
-    try {
-      final document = await FirebaseFirestore.instance
-          .collection('products')
-          .doc(productId)
-          .get();
-
-      if (document.exists) {
-        return document.data() as Map<String, dynamic>;
-      } else {
-        print('Product not found');
-        return null;
-      }
-    } catch (e) {
-      print('Error fetching product: $e');
-      return null;
-    }
-  }
-
+  // --- UPDATED LOGIC FOR TIMESTAMPS ---
   Future<void> _sendMessage(String message) async {
     if (message.trim().isEmpty) return;
+    String textToSend = message.trim();
+    _controller.clear();
 
     try {
       DocumentReference chatRef = _firestore.collection('chats').doc(chatId);
-      DocumentSnapshot chatSnapshot = await chatRef.get();
 
-      if (!chatSnapshot.exists) {
-        await chatRef.set({
-          'productId': widget.productId,
-          'sellerId': widget.sellerId,
-          'userId': widget.userId,
-          'messages': [],
-        });
-      }
-
+      // Prepare the message object
       Map<String, dynamic> messageData = {
         'sender': widget.sellerId,
-        'text': message,
-        'isRead': false
+        'text': textToSend,
+        'isRead': false,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
-      await chatRef.update({
-        'messages': FieldValue.arrayUnion([messageData]),
-      });
+      // COMBINE EVERYTHING: Metadata + Message Array in ONE request
+      await chatRef.set({
+        'productId': widget.productId,
+        'productName': widget.productName,
+        'sellerId': widget.sellerId,
+        'userId': widget.userId,
+        'lastMessage': textToSend,
+        'lastUpdate': FieldValue.serverTimestamp(),
+        'messages': FieldValue.arrayUnion([messageData]), // Combined here!
+      }, SetOptions(merge: true));
 
-      _controller.clear();
-      setState(() {});
     } catch (e) {
-      print('Error sending message: $e');
+      debugPrint('Send Error: $e');
     }
   }
 
-  Widget _buildMessage(String sender, String text, isRead, length, index, docId) {
-    bool isSeller = sender == widget.sellerId;
-
-    return Align(
-      alignment: isSeller ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-        decoration: BoxDecoration(
-          color: isSeller ? Colors.green : Colors.grey[300],
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: isSeller ? Colors.white : Colors.black,
-          ),
-        ),
-      ),
-    );
+  Future<void> _markMessagesAsRead() async {
+    try {
+      DocumentReference chatRef = _firestore.collection('chats').doc(chatId);
+      DocumentSnapshot snap = await chatRef.get();
+      if (snap.exists) {
+        List messages = snap.get('messages') ?? [];
+        bool hasUpdates = false;
+        List updated = messages.map((m) {
+          if (m['sender'] != widget.sellerId && m['isRead'] == false) {
+            hasUpdates = true;
+            return {...m, 'isRead': true};
+          }
+          return m;
+        }).toList();
+        if (hasUpdates) await chatRef.update({'messages': updated});
+      }
+    } catch (e) {
+      debugPrint('Read Status Error: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xffF5F7FB),
       appBar: AppBar(
-        title: Text(userName.isNotEmpty ? userName : widget.userId),
+        elevation: 0.5,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        title: Text(userName, style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: Column(
         children: [
-          FutureBuilder<Map<String, dynamic>?>(
-            future: getProductById(widget.productId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              } else if (snapshot.hasError) {
-                return const Center(child: Text('Error fetching product data'));
-              } else if (!snapshot.hasData || snapshot.data == null) {
-                return const Center(child: Text('Product not found'));
-              } else {
-                final productData = snapshot.data!;
-                return Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                        color: Colors.green.shade300,
-                        borderRadius: BorderRadius.circular(25),
-                        border: Border.all(
-                          color: Colors.black,
-                        )
-                    ),
-                    child: ListTile(
-                      leading: productData['imageUrls'] != null &&
-                          (productData['imageUrls'] as List).isNotEmpty
-                          ? Image.network(
-                        productData['imageUrls'][0],
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                      )
-                          : const Icon(Icons.image_not_supported, size: 50),
-                      title: Text(
-                        productData['title'] ?? 'No Title',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white
-                        ),maxLines: 1,overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(productData['description'] ?? 'No Description', style: const TextStyle(color: Colors.white),maxLines: 1,overflow: TextOverflow.ellipsis,),
-                          const SizedBox(height: 5),
-                          Text(
-                            '\$${productData['price'] ?? '0'}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                              maxLines: 1,overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                      trailing: Text(
-                        productData['category'] ?? 'N/A',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                );
-              }
-            },
-          ),
-          Expanded(
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: _firestore.collection('chats').doc(chatId).snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final chatData = snapshot.data!.data() as Map<String, dynamic>?;
-                List messages = chatData?['messages'] ?? [];
-                messages = messages.reversed.toList();
-
-                return ListView.builder(
-                  reverse: true,
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    return _buildMessage(
-                      message['sender'],
-                      message['text'],
-                      message['isRead'] ?? false,
-                      messages.length,
-                      index,
-                      snapshot.data!.id,
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                    ),
-                  ),
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(50)
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.blue),
-                    onPressed: () => _sendMessage(_controller.text.toString()),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          Expanded(child: _buildMessageList()),
+          _buildInputArea(),
         ],
       ),
     );
   }
 
-  Future<void> CheckMarkedMessage() async {
-    try {
-      DocumentReference chatRef = _firestore.collection('chats').doc(chatId);
-
-      DocumentSnapshot snapshot = await chatRef.get();
-      if (snapshot.exists) {
-        Map<String, dynamic>? chatData =
-        snapshot.data() as Map<String, dynamic>?;
-        if (chatData != null && chatData['messages'] is List) {
-          List messages = chatData['messages'];
-
-          List updatedMessages = messages.map((message) {
-            if (message['sender'] != widget.sellerId &&
-                message['isRead'] == false) {
-              return {
-                ...message,
-                'isRead': true,
-              };
-            }
-            return message;
-          }).toList();
-
-          await chatRef.update({'messages': updatedMessages});
-          print("Marked all unread messages as read.");
-        } else {
-          _sendMessage("Anyone Available to chat?".toString());
+  Widget _buildMessageList() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('chats').doc(chatId).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Center(child: Text("No messages yet"));
         }
-      } else {
-        _sendMessage("Anyone Available to chat?".toString());
-      }
-    } catch (e) {
-      print('Error marking messages as read: $e');
+
+        List messages = snapshot.data!.get('messages') ?? [];
+        return ListView.builder(
+          padding: const EdgeInsets.all(15),
+          reverse: true, // Newest at bottom
+          itemCount: messages.length,
+          itemBuilder: (context, index) {
+            // Get messages in reverse order for the 'reverse: true' ListView
+            final msg = messages[(messages.length - 1) - index];
+            return _buildChatBubble(msg);
+          },
+        );
+      },
+    );
+  }
+
+  // --- UPDATED BUBBLE WITH TYPE SAFETY ---
+  Widget _buildChatBubble(Map<String, dynamic> msg) {
+    bool isMe = msg['sender'] == widget.sellerId;
+
+    DateTime time;
+    dynamic ts = msg['timestamp'];
+
+    if (ts is Timestamp) {
+      time = ts.toDate();
+    } else if (ts is int) {
+      // Handles the millisecondsSinceEpoch we just implemented
+      time = DateTime.fromMillisecondsSinceEpoch(ts);
+    } else {
+      time = DateTime.now();
     }
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              color: isMe ? Colors.green : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              msg['text'] ?? '',
+              style: TextStyle(color: isMe ? Colors.white : Colors.black87),
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(DateFormat.jm().format(time), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              if (isMe) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.done_all, size: 12, color: msg['isRead'] == true ? Colors.blue : Colors.grey),
+              ]
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              decoration: InputDecoration(
+                hintText: "Message...",
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          CircleAvatar(
+            // Updated Send Button to Primary Color
+            backgroundColor: AppColors.primaryGreen,
+            child: IconButton(
+              icon: const Icon(Icons.send, color: Colors.white, size: 20),
+              onPressed: () => _sendMessage(_controller.text),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

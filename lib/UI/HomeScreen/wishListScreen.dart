@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:zrai_mart/UI/product/productFullView.dart';
-
+import 'package:zrai_mart/UI/product/CustomerProductFullView.dart';
 import '../../models/Product.dart';
 
 class WishListScreen extends StatelessWidget {
@@ -11,7 +10,7 @@ class WishListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cartRef = FirebaseFirestore.instance
+    final wishListRef = FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
         .collection('wishList');
@@ -19,23 +18,50 @@ class WishListScreen extends StatelessWidget {
     final productRef = FirebaseFirestore.instance.collection('products');
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Wishlist'),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black),
+        title: const Text(
+          'My Wishlist',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: cartRef.snapshots(),
+        stream: wishListRef.snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.green));
           }
 
-          final wishListDocs = snapshot.data!.docs;
+          final wishListDocs = snapshot.data?.docs ?? [];
 
           if (wishListDocs.isEmpty) {
-            return const Center(child: Text('Your wishlist is empty.'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.favorite_border, size: 80, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Your wishlist is empty',
+                    style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            );
           }
 
-          return ListView.builder(
+          return GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.72,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+            ),
             itemCount: wishListDocs.length,
             itemBuilder: (context, index) {
               final productId = wishListDocs[index]['productId'];
@@ -43,16 +69,12 @@ class WishListScreen extends StatelessWidget {
               return FutureBuilder<DocumentSnapshot>(
                 future: productRef.doc(productId).get(),
                 builder: (context, productSnapshot) {
-                  if (!productSnapshot.hasData) {
-                    return const SizedBox(); // Or show a loading placeholder
+                  if (!productSnapshot.hasData || !productSnapshot.data!.exists) {
+                    return const SizedBox();
                   }
 
-                  final productData = productSnapshot.data!.data();
-                  if (productData == null) return const SizedBox();
-
                   final product = Product.fromDocument(productSnapshot.data!);
-
-                  return _buildProductItemWithRemove(product, userId, context);
+                  return _buildWishlistCard(product, userId, context);
                 },
               );
             },
@@ -62,17 +84,12 @@ class WishListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProductItemWithRemove(Product product, String userId, BuildContext context) {
-    final cartRef = FirebaseFirestore.instance
+  Widget _buildWishlistCard(Product product, String userId, BuildContext context) {
+    final wishListRef = FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
         .collection('wishList');
 
-    double rating = double.parse(product.avgRate);
-    String formattedRating = rating.toStringAsFixed(1);
-    double ratingToDouble = double.parse(formattedRating);
-
-    final width = MediaQuery.of(context).size.width;
     final List<String> imageUrls = List<String>.from(product.imageUrl ?? []);
 
     return GestureDetector(
@@ -80,7 +97,7 @@ class WishListScreen extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => Productfullview(
+            builder: (context) => customerProductfullview(
               imageUrls: product.imageUrl,
               productName: product.name,
               shortDescription: product.description,
@@ -96,107 +113,110 @@ class WishListScreen extends StatelessWidget {
         );
       },
       child: Container(
-        width: width / 0.6,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10.0),
-          boxShadow: const [
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
             BoxShadow(
-              color: Colors.black26,
-              blurRadius: 6,
-              offset: Offset(0, 2),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
             ),
           ],
-          color: Colors.white,
         ),
-        margin: const EdgeInsets.all(8.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(10.0)),
-                  child: Image.network(
-                    imageUrls[0],
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: 130,
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  child: IconButton(
-                    onPressed: () async {
-                      try {
-                        // Remove product from wishlist
-                        await cartRef.doc(product.id).delete();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${product.name} removed from wishlist'),
-                          ),
-                        );
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Error: Could not remove item'),
-                          ),
-                        );
-                        print('Error removing item from wishlist: $e');
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.favorite,
-                      color: Colors.green,
+            // --- IMAGE SECTION WITH ACTIONS ---
+            Expanded(
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+                    child: Image.network(
+                      imageUrls.isNotEmpty ? imageUrls[0] : "",
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image)),
                     ),
                   ),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Text(
-                product.name,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-              child: Text(
-                product.description,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Text(
-                'PKR${product.price.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 16, color: Colors.green),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Row(
-                children: [
-                  Icon(
-                    ratingToDouble == 5.0
-                        ? Icons.star
-                        : ratingToDouble == 0.0
-                        ? Icons.star_border
-                        : Icons.star_half,
-                    color: Colors.green,
+                  // Rental Badge
+                  if (product.isRental)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          "RENTAL",
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  // Remove Button
+                  Positioned(
+                    top: 5,
+                    right: 5,
+                    child: IconButton(
+                      onPressed: () async {
+                        await wishListRef.doc(product.id).delete();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Removed from wishlist'), behavior: SnackBarBehavior.floating),
+                        );
+                      },
+                      icon: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                        child: const Icon(Icons.favorite, color: Colors.green, size: 20),
+                      ),
+                    ),
                   ),
+                ],
+              ),
+            ),
+
+            // --- INFO SECTION ---
+            Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    formattedRating.toString(),
-                    style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold),
+                    product.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    product.category,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'PKR ${product.price.toStringAsFixed(0)}',
+                        style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      if(product.isRental==false)
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.orange, size: 14),
+                          const SizedBox(width: 2),
+                          Text(
+                            product.avgRate,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),

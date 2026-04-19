@@ -18,6 +18,7 @@ class AdminProductCard extends StatelessWidget {
   final double borderRadius;
   final String productId;
   final bool isRental;
+  final String sellerId;
 
   const AdminProductCard({
     super.key,
@@ -34,7 +35,7 @@ class AdminProductCard extends StatelessWidget {
     this.cardColor = Colors.white,
     this.textColor = Colors.black,
     this.borderRadius = 8.0,
-    required this.productId, required this.isRental,
+    required this.productId, required this.isRental, required this.sellerId,
   });
 
   @override
@@ -59,7 +60,7 @@ class AdminProductCard extends StatelessWidget {
                     shortDescription: shortDescription,
                     price: price,
                     categoryName: categoryName,
-                    productId: productId, isRental: isRental, rating: rating.toString(),
+                    productId: productId, isRental: isRental, rating: rating.toString(), sellerId: sellerId,
                   ),
                 ),
               );

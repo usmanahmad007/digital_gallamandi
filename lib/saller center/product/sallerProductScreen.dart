@@ -2,6 +2,7 @@ import 'package:carousel_slider/carousel_slider.dart' as cs;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:zrai_mart/app_colors.dart';
 import 'package:zrai_mart/saller%20center/product/EditProduct.dart';
 import 'package:zrai_mart/saller%20center/product/addProduct.dart';
 import 'package:zrai_mart/saller%20center/product/sallerProductListScreen.dart';
@@ -19,9 +20,9 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
   final cs.CarouselSliderController _controller = cs.CarouselSliderController();
 
   List<String> imageSliders = [];
-  bool isNew=false;
-  int count=0;
-  int stepcount=0;
+  bool isNew = false;
+  int count = 0;
+  int stepcount = 0;
 
   @override
   void initState() {
@@ -36,52 +37,44 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
         .where('sellerId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
         .snapshots()
         .listen((querySnapshot) {
+      count = 0; // Reset count to prevent stacking on each update
       for (var doc in querySnapshot.docs) {
         final data = doc.data();
         List<Map<String, dynamic>> messages = fetchMessagesFromData(data);
-        stepcount=0;
+        stepcount = 0;
         for (var message in messages) {
-          if (message['isRead'] == false && message['sender']!=FirebaseAuth.instance.currentUser!.uid) {
-            // Handle the new message here
-           stepcount=1;
+          if (message['isRead'] == false &&
+              message['sender'] != FirebaseAuth.instance.currentUser!.uid) {
+            stepcount = 1;
             isNew = true;
             break;
-
-            // Check if the widget is still mounted before calling setState
-            /*if (mounted) {
-              setState(() {});
-            }*/
           }
         }
-        count=count+stepcount;
+        count = count + stepcount;
       }
+      if (mounted) setState(() {});
     });
   }
 
   List<Map<String, dynamic>> fetchMessagesFromData(Map<String, dynamic> data) {
     if (data.containsKey('messages') && data['messages'] is List) {
-      // Cast the 'messages' field to a list of Map<String, dynamic>
-      List<Map<String, dynamic>> messages = List<Map<String, dynamic>>.from(data['messages']);
-      return messages;
+      return List<Map<String, dynamic>>.from(data['messages']);
     } else {
-      // Return an empty list if 'messages' doesn't exist or is not a list
       return [];
     }
   }
 
   Future<void> fetchDataFromFirebase() async {
     try {
-      // Fetch slider images from Firestore
       CollectionReference collectionRef =
-          FirebaseFirestore.instance.collection('slider');
+      FirebaseFirestore.instance.collection('slider');
       QuerySnapshot querySnapshot = await collectionRef.get();
-      if(mounted){
+      if (mounted) {
         setState(() {
           imageSliders =
               querySnapshot.docs.map((doc) => doc['image1'] as String).toList();
         });
       }
-
     } catch (e) {
       print('Error fetching data: $e');
     }
@@ -110,9 +103,7 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
           content: const Text('Are you sure you want to delete this product?'),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
               child: const Text('No', style: TextStyle(color: Colors.black)),
             ),
             Container(
@@ -125,7 +116,7 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
                   Navigator.of(context).pop();
                   _deleteProduct(productId);
                 },
-                child: const Text('Yes', style: TextStyle(color: Colors.black)),
+                child: const Text('Yes', style: TextStyle(color: Colors.white)),
               ),
             ),
           ],
@@ -140,30 +131,27 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
       appBar: AppBar(
         title: const Text(
           "Your Products",
-          style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.primaryGreen,
         foregroundColor: Colors.white,
-
         actions: [
           IconButton(
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) =>  const Addproduct()),
+                MaterialPageRoute(builder: (context) => const Addproduct()),
               );
             },
             icon: const Icon(Icons.add),
           ),
-
           GestureDetector(
             onTap: () {
               Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                      const SallerProductListScreen()));
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const SallerProductListScreen()),
+              );
             },
             child: const Padding(
               padding: EdgeInsets.all(8),
@@ -182,136 +170,46 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
               ),
             ),
           ),
-          /*GestureDetector(
-            onTap: (){
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => SellerChatListScreen(
-                          sellerId: FirebaseAuth.instance.currentUser!.uid)));
-            },
-            child: Stack(
-              children: [
-
-                const Positioned(
-
-                    child: Icon(Icons.message_outlined)),
-
-                if(isNew==true)
-                  Positioned(top: 0,
-                      right: 0,
-                      child: Container(
-                        width: 13,
-                        height: 13,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(50)
-                        ),
-                          child: Center(child: Text(count<4?count.toString(): "4+",style: const TextStyle(color: Colors.green,fontWeight: FontWeight.bold,fontSize: 10)*//*,textAlign: TextAlign.center,*//*)))),
-              ],
-            )
-            *//*Row(
-              children: [
-                Icon(Icons.message_outlined),
-                if(isNew==true)
-                Text(count.toString())
-              ],
-            ),*//*
-          ),*/
-         const SizedBox(width: 10,)
-
-         /* IconButton(
-              onPressed: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => SellerChatListScreen(
-                            sellerId: FirebaseAuth.instance.currentUser!.uid)));
-              },
-              icon: isNew==false? Icon(Icons.message_outlined): Icon(Icons.message))*/
+          const SizedBox(width: 10)
         ],
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 10),
-           /* imageSliders.isNotEmpty
-                ? cs.CarouselSlider(
-                    options: cs.CarouselOptions(
-                      aspectRatio: 2.0,
-                      enlargeCenterPage: true,
-                      scrollDirection: Axis.horizontal,
-                      autoPlay: true,
+            // RESTORED SLIDER UI
+          /*  if (imageSliders.isNotEmpty)
+              cs.CarouselSlider(
+                options: cs.CarouselOptions(
+                  aspectRatio: 2.0,
+                  enlargeCenterPage: true,
+                  scrollDirection: Axis.horizontal,
+                  autoPlay: true,
+                ),
+                items: imageSliders.map((item) {
+                  return Center(
+                    child: Image.network(
+                      item,
+                      fit: BoxFit.cover,
+                      width: 1000,
                     ),
-                    items: imageSliders.map((item) {
-                      return Container(
-                        child: Center(
-                          child: Image.network(
-                            item,
-                            fit: BoxFit.cover,
-                            width: 1000,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  )
-                : const SizedBox(
-                    height: 200,
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),*/
+                  );
+                }).toList(),
+              )
+            else
+              const SizedBox(
+                height: 200,
+                child: Center(
+                  child: CircularProgressIndicator(color: Colors.green),
+                ),
+              ),*/
             const SizedBox(height: 10),
-            /*Container(
-              height: 40,
-              width: MediaQuery.of(context).size.width,
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.7),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text(
-                      "Your Products",
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  const SallerProductListScreen()));
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Row(
-                        children: [
-                          Text(
-                            "see all",
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          Icon(
-                            Icons.arrow_forward_ios_sharp,
-                            color: Colors.white,
-                            size: 12,
-                          )
-                        ],
-                      ),
-                    ),
-                  )
-                ],
-              ),
-            ),*/
+            // PRODUCT LISTING
             StreamBuilder<QuerySnapshot>(
               stream: _firestore
                   .collection('products')
                   .where('sellerId',
-                      isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                  isEqualTo: FirebaseAuth.instance.currentUser?.uid)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -334,10 +232,10 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
                   itemCount: products.length,
                   itemBuilder: (context, index) {
                     final product =
-                        products[index].data() as Map<String, dynamic>;
+                    products[index].data() as Map<String, dynamic>;
                     final productId = products[index].id;
                     final List<String> imageUrls =
-                        List<String>.from(product['imageUrls'] ?? []);
+                    List<String>.from(product['imageUrls'] ?? []);
 
                     return GestureDetector(
                       onDoubleTap: () {
@@ -353,55 +251,19 @@ class _sallerProductScreenState extends State<sallerProductScreen> {
                         _showDeleteConfirmationDialog(productId);
                       },
                       child: SallerProductCard(
-                          imageUrls: imageUrls,
-                          categoryName: product['category'],
-                          productName: product['title'],
-                          price: double.parse(product['price']),
-                          onTap: () {
-                            //   Navigator.push(context, MaterialPageRoute(builder: (context)=>SallerProductFullView(imageUrls: product['imageUrls'], productName: product['title'], shortDescription: product['description'], price: product['price'], categoryName: product['category'], productId: productId,)));
-                          },
-                          shortDescription: product['description'],
-                          productId: productId,rating: double.parse(product['averageRating'].toString()), isRental: product['isRental'], quantity: product['quantity'].toString(),),
-                      /* child: Card(
-                        margin: const EdgeInsets.all(8.0),
-                        child: Row(
-                          children: [
-                            // Display product image
-                            product['imageUrls'][0] != null
-                                ? Image.network(
-                              product['imageUrls'][0],
-                              height: 100,
-                              width: 100,
-                              fit: BoxFit.cover,
-                            )
-                                : Container(
-                              height: 100,
-                              width: 100,
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.image, color: Colors.grey),
-                            ),
-                            const SizedBox(width: 10),
-                            // Display product details
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    product['title'] ?? 'Unnamed Product',
-                                    style: const TextStyle(
-                                        fontSize: 16, fontWeight: FontWeight.bold),
-                                  ),
-                                  Text(product['description'] ?? 'No description'),
-                                  Text(
-                                    '\$${product['price']?.toString() ?? '0.0'}',
-                                    style: const TextStyle(color: Colors.green),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),*/
+                        sellerId: product['sellerId'],
+                        imageUrls: imageUrls,
+                        categoryName: product['category'],
+                        productName: product['title'],
+                        price: double.parse(product['price']),
+                        onTap: () {},
+                        shortDescription: product['description'],
+                        productId: productId,
+                        rating: double.parse(
+                            product['averageRating'].toString()),
+                        isRental: product['isRental'],
+                        quantity: product['quantity'].toString(),
+                      ),
                     );
                   },
                 );

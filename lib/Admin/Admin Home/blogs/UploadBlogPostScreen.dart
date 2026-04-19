@@ -3,6 +3,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../../app_colors.dart'; // Ensure this matches your project structure
 
 class UploadBlogPostScreen extends StatefulWidget {
   const UploadBlogPostScreen({super.key});
@@ -20,11 +21,9 @@ class _UploadBlogPostScreenState extends State<UploadBlogPostScreen> {
   File? _image;
   bool _isUploading = false;
 
-  // Pick image from gallery
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
     if (pickedFile != null) {
       setState(() {
         _image = File(pickedFile.path);
@@ -32,40 +31,29 @@ class _UploadBlogPostScreenState extends State<UploadBlogPostScreen> {
     }
   }
 
-  // Upload image to Firebase Storage
   Future<String?> _uploadImage(File image) async {
     try {
-      // Create a unique file name
       String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-
-      // Upload image to Firebase Storage
       TaskSnapshot snapshot = await _storage.ref().child('blog_images/$fileName').putFile(image);
-      String downloadUrl = await snapshot.ref.getDownloadURL();
-
-      return downloadUrl;
+      return await snapshot.ref.getDownloadURL();
     } catch (e) {
-      print('Error uploading image: $e');
+      debugPrint('Error: $e');
       return null;
     }
   }
 
-  // Save blog post data to Firestore
   Future<void> _saveBlogPost() async {
     if (_titleController.text.isEmpty || _descriptionController.text.isEmpty || _image == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All fields are required')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields and pick an image')));
       return;
     }
 
-    setState(() {
-      _isUploading = true;
-    });
+    setState(() => _isUploading = true);
 
-    // Upload image and get the URL
     String? imageUrl = await _uploadImage(_image!);
 
     if (imageUrl != null) {
       try {
-        // Add blog post to Firestore
         await _firestore.collection('blogs').add({
           'title': _titleController.text,
           'description': _descriptionController.text,
@@ -74,100 +62,166 @@ class _UploadBlogPostScreenState extends State<UploadBlogPostScreen> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Blog posted successfully!')));
-
-        // Clear form after submission
         _titleController.clear();
         _descriptionController.clear();
-        setState(() {
-          _image = null;
-        });
+        setState(() => _image = null);
       } catch (e) {
-        print('Error saving blog post: $e');
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error posting blog')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error saving blog post')));
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload image')));
     }
-
-    setState(() {
-      _isUploading = false;
-    });
+    setState(() => _isUploading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final width=MediaQuery.of(context).size.width;
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('Upload Blog Post'),
-        backgroundColor: Colors.green, // Green AppBar color
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Title field
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  labelStyle: TextStyle(color: Colors.green), // Green label
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.green),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Description field
-              TextField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  labelStyle: TextStyle(color: Colors.green), // Green label
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.green),
-                  ),
-                ),
-                maxLines: 5,
-              ),
-              const SizedBox(height: 16),
-              // Image preview
-              _image == null
-                  ? const Text('No image selected.', style: TextStyle(color: Colors.grey))
-                  : Image.file(_image!, height: 200, width: double.infinity, fit: BoxFit.cover),
-              const SizedBox(height: 16),
-              // Pick Image button
-              SizedBox(
-                width: width*0.9,
-                child: ElevatedButton(
-                  onPressed: _pickImage,
-                  style: ElevatedButton.styleFrom(
-                    foregroundColor: Colors.white, backgroundColor: Colors.green, // White text
-                  ),
-                  child: const Text('Pick Image',style: TextStyle(color: Colors.black),),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Submit Blog button
-              _isUploading
-                  ? const CircularProgressIndicator()
-                  : SizedBox(
-                width: width*0.9,
-                    child: ElevatedButton(
-                                  onPressed: _saveBlogPost,
-                                  style: ElevatedButton.styleFrom(
-                    foregroundColor: Colors.white, backgroundColor: Colors.green, // White text
-                                  ),
-                                  child: const Text('Post Blog',style: TextStyle(color: Colors.black),),
-                                ),
-                  ),
-            ],
-          ),
+        title: const Text('Create Blog Post',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Image Picker Section ---
+            const Text("Cover Image",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                width: double.infinity,
+                height: 200,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.grey.shade300, width: 1.5),
+                ),
+                child: _image == null
+                    ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_photo_alternate_outlined,
+                        size: 50, color: AppColors.primaryGreen.withOpacity(0.5)),
+                    const SizedBox(height: 8),
+                    const Text("Upload a catchy photo",
+                        style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                )
+                    : Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.file(_image!,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover),
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: CircleAvatar(
+                        backgroundColor: Colors.black.withOpacity(0.5),
+                        child: IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.white, size: 20),
+                          onPressed: _pickImage,
+                        ),
+                      ),
+                    )
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // --- Form Section ---
+            const Text("Blog Details",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 12),
+
+            _buildCustomField(
+              controller: _titleController,
+              label: "Title",
+              hint: "Enter a compelling title...",
+              icon: Icons.title,
+            ),
+            const SizedBox(height: 16),
+            _buildCustomField(
+              controller: _descriptionController,
+              label: "Content",
+              hint: "What's on your mind?",
+              icon: Icons.subject,
+              maxLines: 6,
+            ),
+            const SizedBox(height: 32),
+
+            // --- Post Button ---
+            SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                onPressed: _isUploading ? null : _saveBlogPost,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryGreen,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 0,
+                ),
+                child: _isUploading
+                    ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text("Post Blog",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            alignLabelWithHint: true,
+            prefixIcon: Icon(icon, color: AppColors.primaryGreen, size: 20),
+            filled: true,
+            fillColor: Colors.white,
+            labelStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

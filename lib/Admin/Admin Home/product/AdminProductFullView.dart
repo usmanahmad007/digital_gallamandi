@@ -187,6 +187,7 @@ class _AdminProductFullViewState extends State<AdminProductFullView> {
                   currentProductId: widget.productId.toString()),
               SizedBox(height: 20,),*/
 
+              if(widget.isRental==false)
               ProductReviewsWidget(productId: widget.productId.toString())
             ],
           ),

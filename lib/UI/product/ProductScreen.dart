@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:zrai_mart/UI/product/productFullView.dart';
+import 'package:zrai_mart/UI/product/CustomerProductFullView.dart';
 
 import 'ProductCard.dart';
 
@@ -53,7 +53,7 @@ class _ProductScreenState extends State<ProductScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => Productfullview(
+                      builder: (context) => customerProductfullview(
                         imageUrls: product['imageUrl'],
                         productName: product['title'],
                         shortDescription: product['description'],

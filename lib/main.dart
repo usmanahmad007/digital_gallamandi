@@ -2,13 +2,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:zrai_mart/UI/splashScreen/splash.dart';
-import 'package:zrai_mart/constantKeyFile.dart';
-
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await _setup();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -21,7 +21,8 @@ Future<void> main() async {
 }
 Future<void> _setup()  async {
 //  WidgetsFlutterBinding.ensureInitialized();
-  Stripe.publishableKey=stripePublishKey;
+  String stripeSecretKey = dotenv.env['stripePublishKey'] ?? '';
+  Stripe.publishableKey=stripeSecretKey;
 }
 
 class MyApp extends StatelessWidget {
@@ -30,7 +31,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Digital Galla Mandi',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),

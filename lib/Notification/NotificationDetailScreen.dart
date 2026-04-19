@@ -1,0 +1,463 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
+
+class NotificationDetailScreen extends StatelessWidget {
+  final String type;
+  final String actionId;
+  final Map<String, dynamic> notificationData;
+
+  const NotificationDetailScreen({
+    super.key,
+    required this.type,
+    required this.actionId,
+    required this.notificationData,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 🔥 Normalize the type to avoid matching errors (e.g., "Order " vs "order")
+    final String cleanType = type.toLowerCase().trim();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF8),
+      appBar: AppBar(
+        title: Text("${cleanType.toUpperCase()} Details"),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeaderCard(),
+            const SizedBox(height: 24),
+            const Text("Detail Information",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Divider(),
+            const SizedBox(height: 10),
+
+            // --- Dynamic Content Logic ---
+            if (cleanType == 'order' && actionId.isNotEmpty)
+              _buildOrderDetails()
+            else if (cleanType == 'store')
+              _buildStoreDetails()
+            else if (cleanType == 'product' && actionId.isNotEmpty)
+                _buildProductDetails()
+              else
+                _buildDefaultDetails(cleanType), // Pass type for debugging
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderDetails() {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('orders').doc(actionId).get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Colors.green));
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return _buildErrorState("Order #$actionId not found.");
+        }
+
+        var data = snapshot.data!.data() as Map<String, dynamic>;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Premium Product Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))
+                ],
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      data['image'] ?? "",
+                      width: 80, height: 80, fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => Container(width: 80, height: 80, color: Colors.grey[100], child: const Icon(Icons.image_not_supported)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(data['title'] ?? "Product",
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18,),overflow: TextOverflow.ellipsis,),
+                        const SizedBox(height: 4),
+                        Text("PKR ${data['totalPrice']}",
+                            style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 18)),
+                      ],
+                    ),
+                  ),
+                  _statusSmallBadge(data['status'] ?? "pending"),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // 2. Delivery Section with Icon
+            _buildSectionTitle(Icons.local_shipping_outlined, "Delivery Details"),
+            const SizedBox(height: 12),
+            _buildDetailCard([
+              _buildInfoRow("Customer", data['name'] ?? "N/A"),
+              _buildInfoRow("Contact", data['phoneNumber'] ?? "N/A"),
+              _buildInfoRow("Address", "${data['address']}, ${data['city']}"),
+            ]),
+
+            const SizedBox(height: 24),
+
+            // 3. Payment Section with Icon
+            _buildSectionTitle(Icons.payments_outlined, "Payment Information"),
+            const SizedBox(height: 12),
+            _buildDetailCard([
+              _buildInfoRow("Method", "Online Payment", isVerified: true),
+              _buildInfoRow("Order ID", actionId, canCopy: true), // Added copy functionality
+              _buildInfoRow("Date", _formatTimestamp(data['orderDate'])),
+
+              if ((notificationData['category'] == 'cancelled' || notificationData['category'] == 'returned') &&
+                  data['reason'] != null &&
+                  data['reason'].toString().trim().isNotEmpty)
+                _buildInfoRow(
+                    "Reason/Note",
+                    data['reason'],
+                    isWarning: true
+                ),
+            ]),
+
+            const SizedBox(height: 40),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- Helper to show verified status for Payment ---
+  // Helper for Section Titles with Icons
+  Widget _buildSectionTitle(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.green),
+        const SizedBox(width: 8),
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+      ],
+    );
+  }
+
+// Fixed Info Row with "Copy" support and no overflow
+  Widget _buildInfoRow(String label, String value, {bool isWarning = false, bool isVerified = false, bool canCopy = false}) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+      title: Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+      subtitle: Row(
+        children: [
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: isWarning ? Colors.redAccent : Colors.black87
+              ),
+            ),
+          ),
+          if (isVerified) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.verified, color: Colors.blue, size: 16),
+          ],
+          if (canCopy) ...[
+            const SizedBox(width: 6),
+            InkWell(
+              onTap: () {
+                // Add: import 'package:flutter/services.dart';
+                 Clipboard.setData(ClipboardData(text: value));
+              },
+              child: const Icon(Icons.copy_rounded, color: Colors.grey, size: 16),
+            ),
+          ]
+        ],
+      ),
+      dense: true,
+    );
+  }
+
+// Styled Status Badge
+  Widget _statusSmallBadge(String status) {
+    final isCompleted = status.toLowerCase() == 'completed';
+    final color = isCompleted ? Colors.green : Colors.orange;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+      ),
+    );
+  }
+
+  // --- Helper Widgets for the Layout ---
+
+  Widget _buildDetailCard(List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        // Use a soft shadow instead of a hard border for a "floating" look
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        // Optional: Very light border just for definition
+        border: Border.all(color: Colors.grey.shade100, width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          children: [
+            // Adds a bit of padding at the top and bottom of the list
+            const SizedBox(height: 10),
+            ...children,
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return "N/A";
+    if (timestamp is Timestamp) {
+      DateTime date = timestamp.toDate();
+      return "${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}";
+    }
+    return timestamp.toString();
+  }
+
+  Widget _buildStoreDetails() {
+    final String rawCategory = (notificationData['category'] ?? "Update").toString();
+    final String category = rawCategory.toUpperCase();
+
+    // Determine Theme based on status
+    Color primaryColor;
+    Color bgColor;
+    IconData statusIcon;
+    String description;
+    bool isReadyToSell = false;
+
+    if (category == 'APPROVED' || category == 'ACTIVE') {
+      primaryColor = Colors.green.shade700;
+      bgColor = Colors.green.shade50;
+      statusIcon = Icons.check_circle_rounded;
+      description = "Congratulations! Your store is live. Customers can now browse your products and you can start earning money.";
+      isReadyToSell = true;
+    } else if (category == 'RESTRICTED') {
+      primaryColor = Colors.red.shade700;
+      bgColor = Colors.red.shade50;
+      statusIcon = Icons.report_problem_rounded;
+      description = "Your store access is limited due to policy violations. You cannot accept new orders or earn money until this is resolved.";
+    } else {
+      // Default / Pending / Update (Orange)
+      primaryColor = Colors.orange.shade800;
+      bgColor = Colors.orange.shade50;
+      statusIcon = Icons.storefront_rounded;
+      description = "Customers cannot see your products yet. Complete your setup to start selling on Zrai Mart and growing your income.";
+    }
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: primaryColor.withOpacity(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 40,
+            backgroundColor: primaryColor.withOpacity(0.1),
+            child: Icon(statusIcon, size: 45, color: primaryColor),
+          ),
+          const SizedBox(height: 16),
+
+          Text(
+            "STORE STATUS",
+            style: TextStyle(
+              letterSpacing: 1.2,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: primaryColor.withOpacity(0.6),
+            ),
+          ),
+          Text(
+            category,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: primaryColor,
+            ),
+          ),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Divider(height: 1, thickness: 1),
+          ),
+
+          // Business Impact Section
+          Row(
+            children: [
+              Icon(
+                  isReadyToSell ? Icons.verified_user_rounded : Icons.monetization_on_outlined,
+                  size: 20,
+                  color: primaryColor
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isReadyToSell ? "You are ready to earn!" : "Your store is not ready to sell.",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey.shade900,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            style: TextStyle(
+              color: Colors.blueGrey.shade700,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+
+          // Action Hint for non-active stores
+          if (!isReadyToSell && category != 'RESTRICTED') ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.bolt, size: 16, color: primaryColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    "Finish setup to go live",
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: primaryColor
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductDetails() {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: const Icon(Icons.inventory_2, color: Colors.teal),
+        title: const Text("Affected Product ID"),
+        subtitle: Text(actionId),
+      ),
+    );
+  }
+
+  // --- Helpers ---
+
+  Widget _buildHeaderCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(notificationData['title'] ?? "Notification",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
+          const SizedBox(height: 8),
+          Text(notificationData['body'] ?? "",
+              style: TextStyle(color: Colors.grey[800], fontSize: 15)),
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildErrorState(String msg) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Text(msg, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500)),
+      ),
+    );
+  }
+
+  Widget _buildDefaultDetails(String cleanType) {
+    return Center(
+      child: Column(
+        children: [
+          const Icon(Icons.search_off, size: 50, color: Colors.grey),
+          const SizedBox(height: 10),
+          Text("No details for type: '$cleanType'"),
+          const Text("Verify that 'type' and 'actionId' are sent correctly.",
+              style: TextStyle(fontSize: 10, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}

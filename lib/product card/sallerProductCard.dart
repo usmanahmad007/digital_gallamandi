@@ -2,26 +2,22 @@ import 'package:flutter/material.dart';
 import '../saller center/product/sallerProductFullView.dart';
 
 class SallerProductCard extends StatelessWidget {
-  final List<String> imageUrls; // Updated to accept multiple images
+  final List<String> imageUrls;
   final String categoryName;
   final String productName;
   final double price;
   final String currency;
   final VoidCallback onTap;
   final String shortDescription;
-  final double? rating; // Optional rating
-  final double? discountPercentage; // Optional discount percentage
-  final bool isAvailable; // Optional availability status
-  final Color cardColor;
-  final Color textColor;
-  final double borderRadius;
+  final double? rating;
   final String productId;
   final bool isRental;
   final String quantity;
+  final String sellerId;
 
   const SallerProductCard({
     super.key,
-    required this.imageUrls, // Changed to List<String>
+    required this.imageUrls,
     required this.categoryName,
     required this.productName,
     required this.price,
@@ -29,123 +25,125 @@ class SallerProductCard extends StatelessWidget {
     required this.onTap,
     required this.shortDescription,
     this.rating,
-    this.discountPercentage,
-    this.isAvailable = true,
-    this.cardColor = Colors.white,
-    this.textColor = Colors.black,
-    this.borderRadius = 8.0,
-    required this.productId, required this.isRental, required this.quantity,
+    required this.productId,
+    required this.isRental,
+    required this.quantity, required this.sellerId,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(10),
-      child: SizedBox(
-        height: 400,
-        child: Card(
-          color: cardColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SallerProductFullView(
-                    imageUrls: imageUrls,
-                    productName: productName,
-                    shortDescription: shortDescription,
-                    price: price,
-                    categoryName: categoryName,
-                    productId: productId, isRental: isRental, rating: rating.toString(),
-                  ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SallerProductFullView(
+                  imageUrls: imageUrls,
+                  productName: productName,
+                  shortDescription: shortDescription,
+                  price: price,
+                  categoryName: categoryName,
+                  productId: productId,
+                  isRental: isRental,
+                  rating: rating.toString(), sellerId: sellerId,
                 ),
-              );
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Image Carousel for multiple images
-                Expanded(
-                  child: PageView.builder(
-                    itemCount: imageUrls.length,
-                    itemBuilder: (context, index) {
-                      return Image.network(
-                        imageUrls[index],
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      );
-                    },
+              ),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image Section
+              Stack(
+                children: [
+                  SizedBox(
+                    height: 200,
+                    child: PageView.builder(
+                      itemCount: imageUrls.length,
+                      itemBuilder: (context, index) {
+                        return Image.network(
+                          imageUrls[index],
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                        );
+                      },
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        productName,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
+                  if (isRental)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange,
+                          borderRadius: BorderRadius.circular(8),
                         ),
+                        child: const Text("Rental", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        categoryName,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: textColor.withOpacity(0.7),
+                    ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          categoryName.toUpperCase(),
+                          style: TextStyle(fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.bold, color: Colors.green.shade700),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$currency ${price.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      isRental==false? Text(
-                        'Quantity: ${quantity.toString()}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ): const Text(''),
-                      Text(
-                        shortDescription,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: textColor.withOpacity(0.7),
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      isRental==false?Row(
-                        children: [
-                          Icon(rating==5.0? Icons.star: rating==0.0? Icons.star_border:Icons.star_half_sharp,color: Colors.green,),
+                        if (!isRental)
                           Text(
-                            '$rating',
-                            style: TextStyle(
-                              fontSize: 22.0,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green[700],
-                            ),
+                            "Qty: $quantity",
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
                           ),
-                        ],
-                      ): Container(),
-                    ],
-                  ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      productName,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text(
+                          '$currency ${price.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Colors.green),
+                        ),
+                        const Spacer(),
+                        if (!isRental && rating != null)
+                          Row(
+                            children: [
+                              const Icon(Icons.star, color: Colors.amber, size: 18),
+                              Text(" $rating", style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

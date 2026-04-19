@@ -1,14 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:zrai_mart/constantKeyFile.dart';
 
 class StripeService {
   StripeService._();
 
   static final StripeService instance = StripeService._();
-
+  String stripeSecretKey = dotenv.env['stripeSecretKey'] ?? '';
   Future<bool> makePayment(int amount) async {
     try {
       String? paymentIntentClientSecret = await _createPaymentIntent(amount, 'pkr');

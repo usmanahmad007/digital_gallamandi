@@ -26,105 +26,141 @@ class _ProductReviewsWidgetState extends State<ProductReviewsWidget> {
       future: _reviewsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Center(child: CircularProgressIndicator(color: Colors.green)),
+          );
         } else if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: 10.0),
-                child: Text(
-                  "Customer Reviews",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              Text('No reviews available.',textAlign: TextAlign.center,),
-            ],
-          );
         }
 
-        final reviewsWithUserData = snapshot.data!;
+        final reviewsWithUserData = snapshot.data ?? [];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10.0),
-              child: Text(
-                "Customer Reviews",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            // --- SECTION HEADER ---
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Row(
+                children: [
+                  const Text(
+                    "Customer Reviews",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      "${reviewsWithUserData.length}",
+                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
             ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: reviewsWithUserData.length,
-              itemBuilder: (context, index) {
-                final reviewData = reviewsWithUserData[index];
-                final user = reviewData['user'];
-                final review = reviewData['review'];
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
+            if (reviewsWithUserData.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text('No reviews yet. Be the first to review!', style: TextStyle(color: Colors.grey)),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: reviewsWithUserData.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final reviewData = reviewsWithUserData[index];
+                  final user = reviewData['user'];
+                  final review = reviewData['review'];
+                  final double ratingValue = (review['rating'] as num).toDouble();
+
+                  return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        radius: 25,
-                        backgroundImage: user['profileImage'] != null
-                            ? NetworkImage(user['profileImage'])
-                            : const AssetImage('assets/img_2.png') // Default image
-                        as ImageProvider,
+                      // --- USER AVATAR ---
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.green.withOpacity(0.2), width: 2),
+                        ),
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Colors.grey[100],
+                          backgroundImage: user['profileImage'] != null
+                              ? NetworkImage(user['profileImage'])
+                              : const AssetImage('assets/img_2.png') as ImageProvider,
+                        ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
+
+                      // --- REVIEW CONTENT ---
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
                                   user['name'] ?? 'Anonymous',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                ),
+                                // --- RATING BADGE ---
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                ),
-                                const SizedBox(width: 10,),
-                                Icon(
-                                  review['rating'] == 5.0
-                                      ? Icons.star
-                                      : review['rating'] == 0.0
-                                      ? Icons.star_border
-                                      : Icons.star_half_sharp,
-                                  color: Colors.green,
-                                ),
-                                Text(
-                                  '${review['rating'].toStringAsFixed(1)}',
-                                  style: TextStyle(
-                                    fontSize: 16.0,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green[700],
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.star_rounded, color: Colors.orange, size: 14),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        ratingValue.toStringAsFixed(1),
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              review['review'] ?? '',
-                              style: const TextStyle(fontSize: 14),
+                            const SizedBox(height: 6),
+                            // --- TEXT BUBBLE ---
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                borderRadius: const BorderRadius.only(
+                                  topRight: Radius.circular(15),
+                                  bottomLeft: Radius.circular(15),
+                                  bottomRight: Radius.circular(15),
+                                ),
+                                border: Border.all(color: Colors.grey[200]!),
+                              ),
+                              child: Text(
+                                review['review'] ?? '',
+                                style: TextStyle(fontSize: 14, color: Colors.grey[800], height: 1.4),
+                              ),
                             ),
-                            const SizedBox(height: 4),
-
                           ],
                         ),
                       ),
                     ],
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+            const SizedBox(height: 20),
           ],
         );
       },
