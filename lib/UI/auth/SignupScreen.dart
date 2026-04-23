@@ -69,12 +69,18 @@ class _SignupscreenState extends State<Signupscreen> {
             'timestamp': FieldValue.serverTimestamp(),
           };
           if (_isAcceptedAdmin) {
-            userData['type'] = "saller";
-            userData['balance'] = 0;
-            userData['isAdminApproved']=false;
-            userData['isSellerRestricted']=false;
-            userData['hasSetupStore']=false;
-            userData['storeStatus']="editable";
+            userData['type'] = "seller";
+            userData['balance'] = 0;            // withdrawable
+           /* userData['onHold'] = 0;             // processing orders
+            userData['totalEarnings'] = 0;      // lifetime earnings
+            userData['totalWithdrawn'] = 0;     // total withdrawn
+            userData['pendingWithdrawal'] = 0; */ // withdrawal requested
+
+            userData['isAdminApproved'] = false;
+            userData['isSellerRestricted'] = false;
+            userData['hasSetupStore'] = false;
+            userData['storeStatus'] = "editable";
+
           }
           await _firestore.collection(collection).doc(user.uid).set(userData);
           _showFloatingSnackBar('Signup successful! Verify your email.', AppColors.successGreen);

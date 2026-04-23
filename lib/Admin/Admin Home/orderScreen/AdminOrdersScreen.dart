@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:zrai_mart/Notification/send_notification.dart';
 import '../../../app_colors.dart';
 import '../../../saller center/orderScreen/ProductDetailsScreen.dart';
 import 'AdminProductDetailsScreen.dart';
@@ -94,42 +95,29 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   }
 
   void handleNotificationUpload(Map<String, dynamic> product, String orderId, String reason) async {
-    await uploadAdminNotification(
-      orderId: orderId,
-      productId: product['productId'],
+    String newStatus="cancelled";
+    String message =
+        "Order Update: The order for '${product['title']}' is now $newStatus";
+
+    if ((newStatus == 'cancelled' || newStatus == 'returned') &&
+        reason != 'none') {
+      message += " Reason: $reason.";
+    }
+
+    await sendNotification(
+      userId: product['userId'], // Specifically targeting the customer
+      senderId: 'admin',
+      senderRole: 'admin',
       sellerId: product['sellerId'],
-      userId: product['userId'],
-      reason: reason,
-      productName: product['title'] ?? "Product",
+      title: "Order Update: ${newStatus.toUpperCase()}",
+      body: message,
+      type: 'order',
+      actionId: orderId,
+      category: newStatus,
     );
   }
 
-  Future<void> uploadAdminNotification({
-    required String orderId,
-    required String productId,
-    required String sellerId,
-    required String userId,
-    required String reason,
-    required String productName,
-  }) async {
-    try {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'orderId': orderId,
-        'productId': productId,
-        'sellerId': sellerId,
-        'userId': userId,
-        'senderId': 'admin',
-        'title': 'Order Cancelled by Admin',
-        'body': 'Order for "$productName" was cancelled. Reason: $reason',
-        'type': 'cancelled',
-        'userIsRead': false,
-        'sellerIsRead': false,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint('Error uploading notification: $e');
-    }
-  }
+
 
   // --- Dialogs & Sheets ---
 

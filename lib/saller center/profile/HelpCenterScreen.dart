@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/saller%20center/profile/PrivacyPolicyScreen.dart';
+import 'package:zrai_mart/saller%20center/profile/TermOfServiceUse.dart';
 
 import '../../app_colors.dart';
+import 'UserGuideScreen.dart';
 // import 'package:zrai_mart/utils/app_colors.dart';
 
 class HelpCenterScreen extends StatefulWidget {
@@ -78,14 +81,103 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
               'Technical issues?',
               ['Restart the app', 'Check your internet connection.', 'Clear the app’s cache', 'Contact support with a screenshot if the issue persists.'],
             ),
+            _buildExpandableFAQ(
+              'My order was cancelled by admin or seller. How will I get my payment back?',
+              [
+                'If an order is cancelled by the seller or admin, the payment will be refunded automatically.',
+                'The refund will be processed to the same payment method used during checkout.',
+                'You will receive a notification once the refund process has started.'
+              ],
+            ),
+
+            _buildExpandableFAQ(
+              'How long does it take to receive a refund after order cancellation?',
+              [
+                'Refunds are usually processed within 3–7 working days.',
+                'The exact time depends on your bank or payment provider.',
+                'If the refund takes longer, you can contact support with your order ID.'
+              ],
+            ),
+
+            _buildExpandableFAQ(
+              'What should I do if I have not received my refund?',
+              [
+                'Check your bank statement or payment wallet first.',
+                'Ensure the refund processing time (3–7 working days) has passed.',
+                'If you still have not received it, contact support with your order details.'
+              ],
+            ),
+
+            _buildExpandableFAQ(
+              'When do sellers receive payment for completed orders?',
+              [
+                'Seller earnings are added to the store balance after an order is successfully completed.',
+                'Payments are held until the delivery is confirmed and the return period has passed.',
+                'This helps ensure a safe transaction for both buyers and sellers.'
+              ],
+            ),
+
+            _buildExpandableFAQ(
+              'How can sellers withdraw their earnings?',
+              [
+                'Sellers can request a withdrawal from the store dashboard.',
+                'Go to Seller Panel > Wallet / Earnings > Withdraw.',
+                'Enter the withdrawal amount and confirm the request.'
+              ],
+            ),
+
+            _buildExpandableFAQ(
+              'How long does seller withdrawal take?',
+              [
+                'Withdrawals are usually processed within 2–5 working days.',
+                'Processing time may vary depending on the payment method.',
+                'You will receive a notification when the withdrawal is completed.'
+              ],
+            ),
+
+            _buildExpandableFAQ(
+              'Why is my store restricted or under review?',
+              [
+                'Stores may be restricted if platform policies are violated.',
+                'The admin team reviews store activities to ensure marketplace safety.',
+                'You will receive a notification explaining the reason and possible next steps.'
+              ],
+            ),
+
+            _buildExpandableFAQ(
+              'How can I contact support for order or payment issues?',
+              [
+                'Use the email or WhatsApp contact provided in the Help Center.',
+                'Include your order ID or store details for faster assistance.',
+                'Our support team will review your request and respond as soon as possible.'
+              ],
+            ),
 
             const SizedBox(height: 30),
 
             // --- RESOURCES SECTION ---
             _buildSectionHeader("Resources"),
-            _buildResourceTile(Icons.menu_book_outlined, "User Guide", "Step-by-step app instructions"),
-            _buildResourceTile(Icons.privacy_tip_outlined, "Privacy Policy", "How we handle your data"),
-            _buildResourceTile(Icons.gavel_outlined, "Terms of Service", "Usage rules and guidelines"),
+            _buildResourceTile(Icons.menu_book_outlined, "User Guide", "Step-by-step app instructions",() {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const UserGuideScreen(),
+                ),
+              );}),
+            _buildResourceTile(Icons.privacy_tip_outlined, "Privacy Policy", "How we handle your data",() {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PrivacyPolicyScreen(),
+                ),
+              );}),
+            _buildResourceTile(Icons.gavel_outlined, "Terms of Service", "Usage rules and guidelines",() {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TermsOfServiceScreen(),
+                ),
+              );}),
 
             const SizedBox(height: 30),
 
@@ -173,18 +265,36 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     );
   }
 
-  Widget _buildResourceTile(IconData icon, String title, String sub) {
+  Widget _buildResourceTile(
+      IconData icon,
+      String title,
+      String sub,
+      VoidCallback onTap,
+      ) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: AppColors.primaryGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(
+          color: AppColors.primaryGreen.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
         child: Icon(icon, color: AppColors.primaryGreen, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-      subtitle: Text(sub, style: const TextStyle(fontSize: 12, color: AppColors.textGrey)),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textGrey),
-      onTap: () {},
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+      ),
+      subtitle: Text(
+        sub,
+        style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+      ),
+      trailing: const Icon(
+        Icons.arrow_forward_ios,
+        size: 14,
+        color: AppColors.textGrey,
+      ),
+      onTap: onTap,
     );
   }
 }

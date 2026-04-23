@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/ChatWithAdmin/ChatWithAdminScreen.dart';
 import 'package:zrai_mart/Notification/Notification.dart';
 import 'package:zrai_mart/UI/profile/EditProfileScreen.dart';
 import 'package:zrai_mart/UI/auth/signInScreen.dart';
@@ -99,6 +100,15 @@ class _ProfilescreenState extends State<Profilescreen> {
                     _buildSettingsTile(Icons.help_outline, "Help Center", () {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterScreen()));
                     }),
+                  ]),
+
+                  const SizedBox(height: 25),
+                  _buildSectionLabel("Admin Complian/Support"),
+                  _buildSettingsGroup([
+                    _buildSettingsTile(Icons.language_outlined, "Write To Admin", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatWithAdminScreen()));
+                    }),
+
                   ]),
 
                   const SizedBox(height: 30),

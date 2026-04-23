@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../../Notification/send_notification.dart';
 import '../../../app_colors.dart';
 import '../StoreView/AdminStoreViewScreen.dart';
 
@@ -14,36 +15,7 @@ class AdminSellersScreen extends StatefulWidget {
 class _AdminSellersScreenState extends State<AdminSellersScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<void> sendNotification({
-    String? userId, // Customer ID
-    String? sellerId, // Seller ID
-    bool isAdmin = true, // If true, notification is for Admin
-    required String title,
-    required String body,
-    required String type, // e.g., 'order', 'store', 'product', 'system'
-    required String
-        category, // e.g., 'cancelled', 'approved', 'deleted', 'restricted'
-    String? actionId, // The ID of the Order, Product, or Store
-  }) async {
-    try {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'userId': userId,
-        'sellerId': sellerId,
-        'isAdmin': isAdmin,
-        'senderId': "",
-        'title': title,
-        'body': body,
-        'type': type,
-        'category': category,
-        'actionId': actionId ?? "",
-        'timestamp': FieldValue.serverTimestamp(),
-        'isRead':
-            false, // Simplified: Each notification doc is specific to one recipient
-      });
-    } catch (e) {
-      debugPrint("Notification Error: $e");
-    }
-  }
+
 
   // --- Logic: Update Seller Status ---
   Future<void> _updateSellerStatus(
@@ -57,18 +29,53 @@ class _AdminSellersScreenState extends State<AdminSellersScreen> {
     try {
       await _firestore.collection('saller').doc(sellerId).update(data);
 
-      sendNotification(
+      await sendStoreUpdateNotification(
         sellerId: sellerId,
-        title: title,
-        body: body,
-        type: type,
-        category: category,
-        actionId: sellerId,
+        newStatus: category,
+        storeName:storeName,
+        title: title
       );
       _showSnackBar("Seller status updated", AppColors.primaryGreen);
     } catch (e) {
       _showSnackBar("Error: $e", Colors.red);
     }
+  }
+  Future<void> sendStoreUpdateNotification({
+    required String sellerId,
+    required String newStatus, // approved | restricted | pending | active
+    required String storeName,
+    required String title,
+  }) async {
+
+    String message = "Your store $storeName status has been updated to ${newStatus.toUpperCase()}.";
+
+    if (newStatus == "approved" || newStatus == "active") {
+      message =
+      "Great news! The store $storeName is now ${newStatus.toUpperCase()} and customers can start viewing your products.";
+    }
+    else if (newStatus == "restricted") {
+      message =
+      "Store $storeName has been RESTRICTED due to policy issues. Please review your store details.";
+    }
+    else if (newStatus == "pending") {
+      message =
+      "Store $storeName is currently under review. We will notify you once it is approved.";
+    }
+
+    await sendNotification(
+      senderRole: "admin", // store updates normally come from admin
+      senderId: "admin",   // you can also use actual admin UID
+
+      sellerId: sellerId,  // target seller
+      userId: null,
+
+      title: title,
+      body: message,
+
+      type: "store",
+      category: newStatus, // used in UI for icon & color
+      actionId: sellerId,  // optional (storeId if you have one)
+    );
   }
 
   // --- Logic: Delete Seller and their Products ---

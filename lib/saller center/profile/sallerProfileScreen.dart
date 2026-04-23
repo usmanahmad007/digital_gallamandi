@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/ChatWithAdmin/ChatWithAdminScreen.dart';
 import 'package:zrai_mart/Notification/Notification.dart';
 import 'package:zrai_mart/UI/auth/signInScreen.dart';
 import 'package:zrai_mart/saller%20center/profile/sallerEditProfileScreen.dart';
@@ -107,6 +108,7 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
     _signOut();
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const Signinscreen()), (route) => false);
   }
+  void handleAdminChatTap()=> Navigator.push(context, MaterialPageRoute(builder: (context)=>const ChatWithAdminScreen()));
 
   Future<void> _signOut() async {
     try {
@@ -226,6 +228,10 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
                   _buildProfileTile(Icons.translate, "Language", handleLanguageTap),
                   _buildProfileTile(Icons.security_outlined, "Privacy Policy", handlePrivacyPolicyTap),
                   _buildProfileTile(Icons.help_outline, "Help Center", handleHelpCenterTap),
+                  const Divider(indent: 20, endIndent: 20),
+
+                  _buildProfileTile(Icons.mark_chat_read, "Write to Admin", handleAdminChatTap,),
+
                   const Divider(indent: 20, endIndent: 20),
                   _buildProfileTile(Icons.logout, "Logout", handleLogoutTap, isLogout: true),
                 ],

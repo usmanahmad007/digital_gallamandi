@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../Notification/send_notification.dart';
 import 'ProductDetailsScreen.dart';
 
 class SellerOrderScreen extends StatefulWidget {
@@ -90,63 +91,7 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
       return false;
     }
   }
-  Future<void> _sendNotification({
-    String? userId,        // Customer ID
-    String? sellerId,      // Seller ID
-    bool isAdmin = false,  // If true, notification is for Admin
-    required String title,
-    required String body,
-    required String type,      // e.g., 'order', 'store', 'product', 'system'
-    required String category,  // e.g., 'cancelled', 'approved', 'deleted', 'restricted'
-    String? actionId,          // The ID of the Order, Product, or Store
-  }) async {
-    try {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'userId': userId,
-        'sellerId': sellerId,
-        'isAdmin': isAdmin,
-        'senderId': FirebaseAuth.instance.currentUser!.uid,
-        'title': title,
-        'body': body,
-        'type': type,
-        'category': category,
-        'actionId': actionId ?? "",
-        'timestamp': FieldValue.serverTimestamp(),
-        'isRead': false, // Simplified: Each notification doc is specific to one recipient
-      });
-    } catch (e) {
-      debugPrint("Notification Error: $e");
-    }
-  }
-  /*Future<void> _sendNotification({
-    String? userId,      // The Customer's ID (Optional)
-    String? sellerId,    // The Seller's ID (Optional)
-    required String title,
-    required String body,
-    required String type,
-    String? orderId,     // Added this so the user can tap to open the order
-    String? productId,   // Added this for the detail screen
-  }) async {
-    try {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        if (userId != null) 'userId': userId,
-        if (sellerId != null) 'sellerId': sellerId,
-        'senderId': _auth.currentUser!.uid,
-        'title': title,
-        'body': body,
-        'type': type,
-        'orderId': orderId ?? "",
-        'productId': productId ?? "",
-        'timestamp': FieldValue.serverTimestamp(),
 
-        // Matches the logic in your Notification Screen
-        'userIsRead': false,
-        'sellerIsRead': false,
-      });
-    } catch (e) {
-      debugPrint("Notification Error: $e");
-    }
-  }*/
 
   Future<void> _updateOrderStatus(String orderId, String newStatus, String reason) async {
     try {
@@ -165,14 +110,20 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
         String productId = data['productId']; // Needed for notification navigation
 
         // Build notification message
-        String message = "Your order for '$productTitle' is now $newStatus.";
-        if ((newStatus == 'cancelled' || newStatus == 'returned') && reason != 'none') {
-          message += " Reason: $reason";
+        String message =
+            "Order Update: The order for '$productTitle' is now ${newStatus.toUpperCase()}.";
+
+        if ((newStatus == 'cancelled' || newStatus == 'returned') &&
+            reason != 'none') {
+          message += " Reason: $reason.";
         }
 
         // Using the updated notification function
-        await _sendNotification(
+        await sendNotification(
           userId: customerId, // Specifically targeting the customer
+          senderId: FirebaseAuth.instance.currentUser!.uid,
+          senderRole: 'seller',
+          sellerId: FirebaseAuth.instance.currentUser!.uid,
           title: "Order Update: ${newStatus.toUpperCase()}",
           body: message,
           type: 'order',

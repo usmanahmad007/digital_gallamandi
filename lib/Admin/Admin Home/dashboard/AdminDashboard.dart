@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:zrai_mart/Admin/Admin%20Home/AdminPanelScreen.dart';
 import 'package:zrai_mart/Admin/Admin%20Home/category/AdminCategoryScreen.dart';
 import 'package:zrai_mart/Admin/Admin%20Home/coupons/AdminCouponScreen.dart';
+import 'package:zrai_mart/Admin/Admin%20Home/support/AdminChatListScreen.dart';
+import 'package:zrai_mart/Notification/Notification.dart';
 import '../../../saller center/orderScreen/ProductDetailsScreen.dart';
 import '../orderScreen/AdminOrdersScreen.dart';
 import '../product/AdminProductScreen.dart';
@@ -134,10 +136,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       }),
                       _moduleTile("Chats", Icons.chat, Colors.cyan, () {
                         // Add your Chats Screen here
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminChatListScreen()));
                       }),
-                      _moduleTile("Notify", Icons.notifications_active, Colors.pink, () {
-                        // Add your Notification Screen here
+                      _moduleTile("Notify", Icons.notifications_active, Colors.cyan, () {
+                        // Add your Chats Screen here
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const UniversalNotificationScreen(currentUserId: 'admin', userRole: 'admin')));
                       }),
+
                     ]),
                   ),
                 ),
