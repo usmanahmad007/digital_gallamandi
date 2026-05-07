@@ -93,65 +93,57 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   }
 
 
-  Future<void> _updateOrderStatus(String orderId, String newStatus, String reason) async {
+  Future<void> _updateOrderStatus(
+      String orderId,
+      String newStatus,
+      String reason) async {
     try {
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(orderId)
-          .update({'status': newStatus, 'reason': reason});
+          .update({
+        'status': newStatus,
+        'reason': reason,
+      });
 
-      // Fetch order details to notify the customer
-      final orderDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+      final orderDoc = await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(orderId)
+          .get();
 
-      if (orderDoc.exists) {
-        final data = orderDoc.data() as Map<String, dynamic>;
-        String customerId = data['userId']; // Ensure this matches your field name in 'orders'
-        String productTitle = data['title'];
-        String productId = data['productId']; // Needed for notification navigation
+      if (!orderDoc.exists) return;
 
-        // Build notification message
-        String message =
-            "Order Update: The order for '$productTitle' is now ${newStatus.toUpperCase()}.";
+      final data = orderDoc.data() as Map<String, dynamic>;
 
-        if ((newStatus == 'cancelled' || newStatus == 'returned') &&
-            reason != 'none') {
-          message += " Reason: $reason.";
-        }
-
-        // Using the updated notification function
-        await sendNotification(
-          userId: customerId, // Specifically targeting the customer
-          senderId: FirebaseAuth.instance.currentUser!.uid,
-          senderRole: 'seller',
-          sellerId: FirebaseAuth.instance.currentUser!.uid,
-          title: "Order Update: ${newStatus.toUpperCase()}",
-          body: message,
-          type: 'order',
-          actionId: orderId,
-          category: newStatus,
-        );
-      }
-
-
+      await sendNotification(
+        userId: data['userId'],
+        senderId: FirebaseAuth.instance.currentUser!.uid,
+        senderRole: 'seller',
+        sellerId: FirebaseAuth.instance.currentUser!.uid,
+        title: "Order Update: ${newStatus.toUpperCase()}",
+        body:
+        "Order for '${data['title']}' is now ${newStatus.toUpperCase()}. ${reason != 'none' ? "Reason: $reason" : ""}",
+        type: 'order',
+        actionId: orderId,
+        category: newStatus,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Order status updated to $newStatus.')),
+          SnackBar(content: Text('Order updated to $newStatus')),
         );
       }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to update status.')),
-        );
-      }
+    } catch (e) {
+      debugPrint("Update Error: $e");
     }
   }
 
   Future<void> updateSellerBalance(String productId, int soldQuantity) async {
     try {
       final firestore = FirebaseFirestore.instance;
-      final productSnapshot = await firestore.collection('products').doc(productId).get();
+      final productSnapshot =
+      await firestore.collection('products').doc(productId).get();
+
       if (productSnapshot.exists) {
         final String sellerId = productSnapshot['sellerId'];
         final double pricePerUnit = double.parse(productSnapshot['price']);
@@ -159,36 +151,165 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
 
         final sellerRef = firestore.collection('saller').doc(sellerId);
         final sellerSnapshot = await sellerRef.get();
+
         if (sellerSnapshot.exists) {
-          final double currentBalance = double.parse(sellerSnapshot['balance'].toString());
-          await sellerRef.update({'balance': currentBalance + revenue});
+          final double currentOnHold =
+          double.parse(sellerSnapshot['onHold'].toString());
+
+          await sellerRef.update({
+            'onHold': currentOnHold + revenue,
+          });
         }
       }
     } catch (e) {
       debugPrint('Balance Error: $e');
     }
   }
-
-  // Updated to handle both Shipped and Completion
-  Future<void> handleOrderProgression(String productId, int soldQuantity, String orderId, String targetStatus) async {
+  Future<void> releaseOnHoldToBalance(String productId, int soldQuantity) async {
     try {
-      final productRef = FirebaseFirestore.instance.collection('products').doc(productId);
-      DocumentSnapshot productSnapshot = await productRef.get();
+      final firestore = FirebaseFirestore.instance;
+
+      final productSnapshot =
+      await firestore.collection('products').doc(productId).get();
 
       if (productSnapshot.exists) {
-        if (targetStatus == 'shipped') {
-          int currentQuantity = int.parse(productSnapshot['quantity']);
-          if (currentQuantity < soldQuantity) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insufficient stock!')));
-            return;
-          }
-          await updateSellerBalance(productId, soldQuantity);
-          await productRef.update({'quantity': (currentQuantity - soldQuantity).toString()});
+        final String sellerId = productSnapshot['sellerId'];
+        final double pricePerUnit = double.parse(productSnapshot['price']);
+        final double revenue = pricePerUnit * soldQuantity;
+
+        final sellerRef = firestore.collection('saller').doc(sellerId);
+        final sellerSnapshot = await sellerRef.get();
+
+        if (sellerSnapshot.exists) {
+          final double balance =
+          double.parse(sellerSnapshot['balance'].toString());
+
+          final double onHold =
+          double.parse(sellerSnapshot['onHold'].toString());
+
+          await sellerRef.update({
+            'balance': balance + revenue,
+            'onHold': onHold - revenue,
+          });
         }
-        await _updateOrderStatus(orderId, targetStatus, 'none');
       }
     } catch (e) {
+      debugPrint('Release Balance Error: $e');
+    }
+  }
+
+  Future<void> handleOrderProgression(
+      String productId,
+      int soldQuantity,
+      String orderId,
+      String targetStatus) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final productRef = firestore.collection('products').doc(productId);
+      final productSnapshot = await productRef.get();
+
+      if (!productSnapshot.exists) return;
+
+      int currentQuantity = int.parse(productSnapshot['quantity']);
+      final String sellerId = productSnapshot['sellerId'];
+      final double pricePerUnit = double.parse(productSnapshot['price']);
+      final double revenue = pricePerUnit * soldQuantity;
+
+      final sellerRef = firestore.collection('saller').doc(sellerId);
+      final sellerSnapshot = await sellerRef.get();
+
+      double balance = double.parse(sellerSnapshot['balance'].toString());
+      double onHold = double.parse(sellerSnapshot['onHold'].toString());
+      double totalEarnings = double.parse(sellerSnapshot['totalEarnings'].toString());
+
+
+      /// ========================
+      /// SHIPPED → MOVE TO ON HOLD
+      /// ========================
+      if (targetStatus == 'shipped') {
+        if (currentQuantity < soldQuantity) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Insufficient stock!')));
+          return;
+        }
+
+        await productRef.update({
+          'quantity': (currentQuantity - soldQuantity).toString()
+        });
+
+        await sellerRef.update({
+          'onHold': onHold + revenue,
+        });
+      }
+
+      /// ========================
+      /// COMPLETED → ON HOLD → BALANCE
+      /// ========================
+      else if (targetStatus == 'completed') {
+        await sellerRef.update({
+          'balance': balance + revenue,
+          'totalEarnings': totalEarnings+revenue,
+          'onHold': onHold - revenue,
+        });
+      }
+
+      /// ========================
+      /// CANCELLED AFTER SHIPPED → REMOVE ON HOLD ONLY
+      /// ========================
+      else if (targetStatus == 'cancelled') {
+        if (sellerSnapshot.exists) {
+          await sellerRef.update({
+            'onHold': onHold - revenue,
+          });
+        }
+      }
+
+      /// ========================
+      /// RETURNED → REMOVE ON HOLD + RESTORE STOCK
+      /// ========================
+      else if (targetStatus == 'returned') {
+        await sellerRef.update({
+          'onHold': onHold - revenue,
+        });
+
+        await productRef.update({
+          'quantity': (currentQuantity + soldQuantity).toString()
+        });
+      }
+
+      await _updateOrderStatus(orderId, targetStatus, 'none');
+    } catch (e) {
       debugPrint('Progression Error: $e');
+    }
+  }
+
+  Future<void> removeFromOnHold(String productId, int soldQuantity) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      final productSnapshot =
+      await firestore.collection('products').doc(productId).get();
+
+      if (productSnapshot.exists) {
+        final String sellerId = productSnapshot['sellerId'];
+        final double pricePerUnit = double.parse(productSnapshot['price']);
+        final double revenue = pricePerUnit * soldQuantity;
+
+        final sellerRef = firestore.collection('saller').doc(sellerId);
+        final sellerSnapshot = await sellerRef.get();
+
+        if (sellerSnapshot.exists) {
+          final double onHold =
+          double.parse(sellerSnapshot['onHold'].toString());
+
+          await sellerRef.update({
+            'onHold': onHold - revenue,
+          });
+
+        }
+      }
+    } catch (e) {
+      debugPrint('Cancel Balance Error: $e');
     }
   }
 

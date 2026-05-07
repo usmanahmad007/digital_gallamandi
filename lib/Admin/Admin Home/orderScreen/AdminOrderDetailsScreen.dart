@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-class ProductDetailsScreen extends StatefulWidget {
+class AdminOrderDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> product;
 
-  const ProductDetailsScreen({super.key, required this.product});
+  const AdminOrderDetailsScreen({super.key, required this.product});
 
   @override
-  State<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
+  State<AdminOrderDetailsScreen> createState() => _AdminOrderDetailsScreenState();
 }
 
-class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
+class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   Widget _buildReadOnlyField(String label, String value) {
     return TextFormField(
       initialValue: value,

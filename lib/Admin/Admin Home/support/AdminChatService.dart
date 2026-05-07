@@ -15,9 +15,11 @@ class AdminChatService {
   Future createChatIfNotExists(String chatId, String userId) async {
     await firestore.collection("adminChat").doc(chatId).set({
       "participants": [userId, adminId],
-      "lastMessage": "",
+      "lastMessage": "Start Conversation",
       "lastType": "text",
+      "senderId":userId,
       "lastTime": FieldValue.serverTimestamp(),
+      'isSeen':false,
     }, SetOptions(merge: true));
   }
 
@@ -38,7 +40,9 @@ class AdminChatService {
     await firestore.collection("adminChat").doc(chatId).set({
       "lastMessage": text,
       "lastType": "text",
+      "senderId":senderId,
       "lastTime": FieldValue.serverTimestamp(),
+      'isSeen':false,
     }, SetOptions(merge: true));
     debugPrint("GIFT2");
 
@@ -68,6 +72,8 @@ class AdminChatService {
       "lastMessage": "📷 Image",
       "lastType": "image",
       "lastTime": FieldValue.serverTimestamp(),
+      "senderId":senderId,
+      'isSeen':false,
     }, SetOptions(merge: true));
   }
 
@@ -100,8 +106,24 @@ class AdminChatService {
         batch.update(doc.reference, {"isSeen": true});
       }
 
+
       // Submit all updates in one single trip to the server
       await batch.commit();
+      final chatDoc = await firestore
+          .collection("adminChat")
+          .doc(chatId)
+          .get();
+
+      final data = chatDoc.data() ?? {};
+
+      final lastSenderId = data["lastSenderId"] ?? "";
+
+// ✅ Only mark seen if viewer is NOT the sender
+      if (lastSenderId != viewerId) {
+        await firestore.collection("adminChat").doc(chatId).update({
+          "isSeen": true,
+        });
+      }
     } catch (e) {
       debugPrint("Error marking as seen: $e");
     }

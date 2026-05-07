@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:zrai_mart/Admin/Admin%20Home/product/AdminProductFullView.dart';
-import 'package:zrai_mart/app_colors.dart';
+import '../../../Notification/send_notification.dart';
 import '../../../models/Product.dart';
 
 class AdminStoreReviewScreen extends StatefulWidget {
@@ -15,19 +17,15 @@ class AdminStoreReviewScreen extends StatefulWidget {
 class _AdminStoreReviewScreenState extends State<AdminStoreReviewScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  final Color primaryGreen = const Color(0xFF1B3D2F);
+  final Color primaryGreen = const Color(0xFF004D40); // Deep Forest Green
+  final Color accentGreen = const Color(0xFF00BFA5);
+  final Color bgGray = const Color(0xFFF4F7F6);
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-
-    // Explicit listener to update the UI when swiping or clicking tabs
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {});
-      }
-    });
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
   }
 
   @override
@@ -36,458 +34,338 @@ class _AdminStoreReviewScreenState extends State<AdminStoreReviewScreen>
     super.dispose();
   }
 
-  // Update this to handle multiple fields (like status and approval at once)
-// --- Added Notification Method inside _AdminStoreReviewScreenState ---
-  Future<void> sendNotification({
-    String? sellerId,
-    required String title,
-    required String body,
-    required String type,
-    required String category,
-  }) async {
+  // --- Logic: Delete Store ---
+  Future<void> _deleteStore() async {
     try {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'sellerId': sellerId,
-        'isAdmin': false,
-        'senderId': "ADMIN",
-        'title': title,
-        'body': body,
-        'type': type,
-        'category': category,
-        'actionId': sellerId ?? "",
-        'timestamp': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
-    } catch (e) {
-      debugPrint("Notification Error: $e");
-    }
-  }
+      var productQuery = await FirebaseFirestore.instance
+          .collection('products')
+          .where('sellerId', isEqualTo: widget.sellerId)
+          .get();
 
-// --- Updated Status Update Method ---
-  Future<void> _updateStatus({
-    required Map<String, dynamic> updates,
-    required String title,
-    required String body,
-    required String category,
-    required String type,
-  }) async {
-    try {
+      for (var doc in productQuery.docs) {
+        await doc.reference.delete();
+      }
+
       await FirebaseFirestore.instance
-          .collection('saller') // Match your 'saller' typo for consistency
-          .doc(widget.sellerId)
-          .update(updates);
-
-      // Trigger the notification
-      await sendNotification(
-        sellerId: widget.sellerId,
-        title: title,
-        body: body,
-        type: type,
-        category: category,
-      );
-
-      _showSnackBar("Store status updated successfully", AppColors.primaryGreen);
-    } catch (e) {
-      _showSnackBar("Error updating status: $e", Colors.red);
-    }
-  }
-
-// --- Redesigned Admin Control Panel ---
-  Widget _buildAdminControlPanel() {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
           .collection('saller')
           .doc(widget.sellerId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox.shrink();
-        var data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+          .delete();
 
-        bool isApproved = data['isAdminApproved'] ?? false;
-        bool isRestricted = data['isSellerRestricted'] ?? false;
-        String storeStatus = (data['storeStatus'] ?? "").toString().toLowerCase();
-        String storeName = data['storeName'] ?? "Store";
-
-        return Container(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 25), // Extra bottom padding for safe area
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
-            border: const Border(top: BorderSide(color: Colors.black12)),
-          ),
-          child: Row(
-            children: [
-              // CASE 1: Pending Updates
-              if (storeStatus == "pending")
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _updateStatus(
-                      updates: {'isAdminApproved': true, 'storeStatus': 'editable'},
-                      title: "Updates Approved! ✅",
-                      body: "Your recent changes to '$storeName' have been approved and are now visible.",
-                      type: "store",
-                      category: "approved",
-                    ),
-                    icon: const Icon(Icons.check_circle_outline, color: Colors.white),
-                    label: const Text("APPROVE UPDATES"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                  ),
-                )
-
-              // CASE 2: New Store (Initial Setup)
-              else if (!isApproved)
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _updateStatus(
-                      updates: {'isAdminApproved': true, 'storeStatus': 'editable'},
-                      title: "Store Approved! 🎉",
-                      body: "Congratulations! Your store '$storeName' is now live and ready for customers.",
-                      type: "store",
-                      category: "approved",
-                    ),
-                    icon: const Icon(Icons.verified_user),
-                    label: const Text("APPROVE STORE"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                  ),
-                )
-
-              // CASE 3: Active Store Management
-              else ...[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        final bool nextRestrictedState = !isRestricted;
-                        _updateStatus(
-                          updates: {
-                            'isSellerRestricted': nextRestrictedState,
-                            'category': nextRestrictedState ? 'restricted' : 'approved',
-                          },
-                          title: nextRestrictedState ? "Store Restricted ⚠️" : "Restriction Lifted! 🔓",
-                          body: nextRestrictedState
-                              ? "Your store '$storeName' has been restricted. Please contact support."
-                              : "Great news! Your store '$storeName' is active again.",
-                          type: "store",
-                          category: nextRestrictedState ? "restricted" : "approved",
-                        );
-                      },
-                      icon: Icon(isRestricted ? Icons.lock_open : Icons.block),
-                      label: Text(isRestricted ? "UNBLOCK" : "BLOCK"),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: isRestricted ? Colors.green : Colors.orange,
-                        side: BorderSide(color: isRestricted ? Colors.green : Colors.orange),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    onPressed: () => _showDeleteDialog(),
-                    icon: const Icon(Icons.delete_forever, color: Colors.red),
-                  ),
-                ]
-            ],
-          ),
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Merchant data wiped successfully"),
+              backgroundColor: Colors.black87),
         );
-      },
+      }
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
+
+  void _showDeleteConfirmation() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            const Icon(Icons.warning_rounded, color: Colors.red, size: 50),
+            const SizedBox(height: 16),
+            const Text("Permanent Action", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text("Are you sure you want to delete this store? This will remove all products and financial records forever.",
+                textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(child: TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel"))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, elevation: 0),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _deleteStore();
+                    },
+                    child: const Text("Confirm Delete", style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ],
+            )
+          ],
+        ),
+      ),
     );
   }
 
-// --- Delete Dialog Implementation ---
-  void _showDeleteDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Permanent Delete?"),
-        content: const Text("This will remove the seller and all their products. This cannot be undone."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Exit detail view back to list
-              // You should call your _deleteSeller logic here
-            },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
+  // --- UI Elements ---
+
+  Widget _buildStatCard(String label, dynamic value, IconData icon, Color color, {bool isMoney = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          CircleAvatar(radius: 14, backgroundColor: color.withOpacity(0.1), child: Icon(icon, size: 16, color: color)),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isMoney ? "Rs ${NumberFormat('#,###').format(value ?? 0)}" : "$value",
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+              ),
+              Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+            ],
+          )
         ],
       ),
     );
   }
 
-  void _showSnackBar(String msg, Color bg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(msg),
-          backgroundColor: bg,
-          behavior: SnackBarBehavior.floating),
+  Widget _buildInfoTile(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: primaryGreen.withOpacity(0.7)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
+  Future<void> _openMap(double lat, double long) async {
+    final String googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=$lat,$long";
+    final Uri uri = Uri.parse(googleMapsUrl);
 
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Could not open Google Maps")),
+      );
+    }
+  }
+  Widget _buildLocationTile(Map<String, dynamic> data) {
+    // Safe parsing of coordinates
+    final double lat = double.tryParse(data['latitude']?.toString() ?? '0') ?? 0.0;
+    final double lng = double.tryParse(data['longitude']?.toString() ?? '0') ?? 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center, // Align button with text center
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: primaryGreen.withOpacity(0.1),
+            child: Icon(Icons.map_outlined, size: 20, color: primaryGreen),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Coordinates",
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text("Lat: $lat, Long: $lng",
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          // The Action Button
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              onPressed: () => _openMap(lat, lng),
+              icon: const Icon(Icons.directions, color: Colors.blue),
+              tooltip: "Open in Google Maps",
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8F7),
-      bottomNavigationBar: _buildAdminControlPanel(),
+      backgroundColor: bgGray,
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('saller')
-            .doc(widget.sellerId)
-            .snapshots(),
-        builder: (context, userSnapshot) {
-          if (!userSnapshot.hasData)
-            return const Center(child: CircularProgressIndicator());
+        stream: FirebaseFirestore.instance.collection('saller').doc(widget.sellerId).snapshots(),
+        builder: (context, sellerSnapshot) {
+          if (!sellerSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+          var sellerData = sellerSnapshot.data?.data() as Map<String, dynamic>? ?? {};
 
-          var sellerData =
-              userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
-          if (sellerData.isEmpty)
-            return const Center(child: Text("No data found"));
-          String storeStatus = (sellerData['storeStatus'] ?? "").toString().toLowerCase();
-          bool hasSetup = sellerData['hasSetupStore'] ?? false;
-          bool isApproved = sellerData['isAdminApproved'] ?? false;
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('orders').where('sellerId', isEqualTo: widget.sellerId).snapshots(),
+            builder: (context, orderSnapshot) {
+              // Simple logic for counts
+              // Update your counting logic like this:
+              Map<String, int> counts = {
+                "Total": 0,
+                "Pending": 0,
+                "InProcess": 0, // Added this
+                "Shipped": 0,
+                "Done": 0,
+                "Cancelled": 0,
+                "Returned": 0
+              };
 
-          return CustomScrollView(
-            slivers: [
-              _buildModernHeader(sellerData),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      _buildApprovalStatusBanner(hasSetup, isApproved, storeStatus),
-                      const SizedBox(height: 12),
-                      _buildModernProfileInfo(sellerData),
-                      const SizedBox(height: 24),
-                      _buildInfoTile("Email", sellerData['email'] ?? "N/A",
-                          Icons.email_outlined),
-                      _buildInfoTile("Address", sellerData['address'] ?? "N/A",
-                          Icons.location_on_outlined),
-                      _buildInfoTile(
-                          "Description",
-                          sellerData['description'] ?? "N/A",
-                          Icons.info_outline),
-                    ],
+              if (orderSnapshot.hasData) {
+                for (var doc in orderSnapshot.data!.docs) {
+                  String s = doc['status'].toString().toLowerCase();
+                  counts["Total"] = (counts["Total"] ?? 0) + 1;
+
+                  if (s == 'pending') {
+                    counts["Pending"] = (counts["Pending"] ?? 0) + 1;
+                  } else if (s == 'in process' || s == 'processing') {
+                    // Added logic to catch various "process" naming conventions
+                    counts["InProcess"] = (counts["InProcess"] ?? 0) + 1;
+                  } else if (s == 'shipped') {
+                    counts["Shipped"] = (counts["Shipped"] ?? 0) + 1;
+                  } else if (s == 'completed' || s == 'delivered') {
+                    counts["Done"] = (counts["Done"] ?? 0) + 1;
+                  } else if (s == 'cancelled') {
+                    counts["Cancelled"] = (counts["Cancelled"] ?? 0) + 1;
+                  } else if (s == 'returned') {
+                    counts["Returned"] = (counts["Returned"] ?? 0) + 1;
+                  }
+                }
+              }
+
+              return CustomScrollView(
+                slivers: [
+                  _buildHeader(sellerData),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Inside your Column in SliverToBoxAdapter
+                          const SizedBox(height: 20),
+                          _buildSectionTitle("Contact & Location"),
+                          Container(
+                            margin: const EdgeInsets.only(top: 10),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Column(
+                              children: [
+                                _buildInfoTile(Icons.email_outlined, "Email Address", sellerData['email'] ?? "N/A"),
+                                const Divider(height: 20),
+                                _buildInfoTile(Icons.location_on_outlined, "Store Address",
+                                    sellerData['address'] ?? "No address provided"),
+                                const Divider(height: 20),
+                                // Replace your old _buildInfoTile for coordinates with this:
+                                _buildLocationTile(sellerData),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          _buildSectionTitle("Financial Health"),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 110,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                _buildStatCard("Total Earned", sellerData['totalEarnings'], Icons.account_balance_wallet, Colors.blue, isMoney: true),
+                                const SizedBox(width: 12),
+                                _buildStatCard("Withdrawn", sellerData['totalWithdrawn'], Icons.outbox, Colors.orange, isMoney: true),
+                                const SizedBox(width: 12),
+                                _buildStatCard("Available", sellerData['balance'], Icons.monetization_on, Colors.green, isMoney: true),
+                                const SizedBox(width: 12),
+                                _buildStatCard("Pending Withdrawal", sellerData['pendingWithdrawal'], Icons.outbox, Colors.orange, isMoney: true),
+                                const SizedBox(width: 12),
+                                _buildStatCard("On Hold", sellerData['onHold'], Icons.monetization_on, Colors.green, isMoney: true),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          _buildSectionTitle("Order Performance"),
+                          const SizedBox(height: 12),
+                          GridView.count(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 1.1,
+                            children: [
+                              _buildMiniStat("Total", counts["Total"], Colors.blueGrey),
+                              _buildMiniStat("Pending", counts["Pending"], Colors.amber),
+                              _buildMiniStat("Processing", counts["InProcess"], Colors.deepOrange), // Added UI tile
+                              _buildMiniStat("Shipped", counts["Shipped"], Colors.blue),
+                              _buildMiniStat("Success", counts["Done"], Colors.green),
+                              _buildMiniStat("Returned", counts["Returned"], Colors.brown),
+                              _buildMiniStat("Cancelled", counts["Cancelled"], Colors.red),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              _buildStickyTabs(), // The Fixed Tabs
-              _buildProductGrid(), // The Reactive Grid
-              const SliverToBoxAdapter(child: SizedBox(height: 50)),
-            ],
+                  _buildPersistentTabs(),
+                  _tabController.index == 2 ? _buildFinanceList() : _buildProductGrid(),
+                  const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                ],
+              );
+            },
           );
         },
       ),
+      bottomSheet: _buildBottomDock(),
     );
   }
 
-  // --- UPDATED: Fixed Tab Logic ---
-  Widget _buildStickyTabs() {
-    return SliverPersistentHeader(
+  Widget _buildHeader(Map<String, dynamic> data) {
+    return SliverAppBar(
+      expandedHeight: 220,
       pinned: true,
-      delegate: _SliverAppBarDelegate(
-        Container(
-          color: const Color(0xFFF6F8F7),
-          child: TabBar(
-            controller: _tabController,
-            labelColor: AppColors.primaryGreen,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: AppColors.primaryGreen,
-            onTap: (index) {
-              setState(() {}); // Force rebuild of the grid on tap
-            },
-            tabs: const [
-              Tab(text: "Products"),
-              Tab(text: "Rentals"),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProductGrid() {
-    return StreamBuilder<QuerySnapshot>(
-      // Key is essential here to force StreamBuilder to refresh when tab index changes
-      key: ValueKey('grid_tab_${_tabController.index}'),
-      stream: FirebaseFirestore.instance
-          .collection('products')
-          .where('sellerId', isEqualTo: widget.sellerId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData)
-          return const SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator()));
-
-        final allProducts =
-            snapshot.data!.docs.map((d) => Product.fromDocument(d)).toList();
-
-        // Filter: Tab 0 = Products (isRental: false), Tab 1 = Rentals (isRental: true)
-        final filteredList = allProducts
-            .where((p) => p.isRental == (_tabController.index == 1))
-            .toList();
-
-        if (filteredList.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.only(top: 50),
-              child: Center(child: Text("No items found in this category")),
-            ),
-          );
-        }
-
-        return SliverPadding(
-          padding: const EdgeInsets.all(16),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _buildItemCard(filteredList[index]),
-              childCount: filteredList.length,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // --- UI Components ---
-
-  Widget _buildItemCard(Product product) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (context) => AdminProductFullView(
-                    imageUrls: product.imageUrl,
-                    productName: product.name,
-                    shortDescription: product.description,
-                    price: product.price,
-                    categoryName: product.category,
-                    productId: product.id,
-                    isRental: product.isRental,
-                    rating: product.avgRate,isAdmin: true,)));
-      },
-      child: Card(
-        elevation: 0,
-        clipBehavior: Clip
-            .antiAlias, // Ensures content doesn't bleed out of rounded corners
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.grey.shade100),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      elevation: 0,
+      backgroundColor: primaryGreen,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+        title: Text(data['storeName'] ?? "Merchant", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+        background: Stack(
+          fit: StackFit.expand,
           children: [
-            // 1. Image Section with Overlay Rating
-            Expanded(
-              flex: 5,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Image.network(
-                      product.imageUrl.isNotEmpty ? product.imageUrl[0] : '',
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => Container(
-                        color: Colors.grey[100],
-                        child: const Icon(Icons.image_not_supported,
-                            color: Colors.grey),
-                      ),
-                    ),
-                  ),
-                  // Floating Rating Badge
-                  if (product.isRental == false)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 4)
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.star_rounded,
-                                color: Colors.amber, size: 14),
-                            const SizedBox(width: 2),
-                            Text(
-                              product.avgRate.toString(),
-                              style: const TextStyle(
-                                  fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // 2. Info Section
-            Expanded(
-              flex: 4,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Product Name
-                    Text(
-                      product.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Color(0xFF1B3D2F),
-                      ),
-                    ),
-
-                    // Category or Type Label
-                    Text(
-                      product.category ??
-                          (product.isRental ? "Rental Service" : "Product"),
-                      style: TextStyle(
-                          color: Colors.grey[500],
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500),
-                    ),
-
-                    const Spacer(),
-
-                    // Price Section
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            "PKR ${product.price}",
-                            style: const TextStyle(
-                              color: AppColors.primaryGreen,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        // Small Decorative Icon
-                        const Icon(Icons.arrow_forward_ios,
-                            size: 10, color: Colors.grey),
-                      ],
-                    ),
-                  ],
-                ),
+            Image.network(data['backgroundImage'] ?? '', fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: primaryGreen)),
+            Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withOpacity(0.1), Colors.black.withOpacity(0.8)]))),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: CircleAvatar(radius: 40, backgroundImage: NetworkImage(data['storeLogo'] ?? '')),
               ),
             ),
           ],
@@ -496,75 +374,77 @@ class _AdminStoreReviewScreenState extends State<AdminStoreReviewScreen>
     );
   }
 
-  Widget _buildApprovalStatusBanner(bool setup, bool approved, String status) {
-    String message = "";
-    Color color = Colors.blue;
+  Widget _buildSectionTitle(String title) {
+    return Text(title.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey[600], letterSpacing: 1.2));
+  }
 
-    if (!setup) {
-      message = "Setup Pending";
-      color = Colors.grey;
-    } else if (status == "pending") {
-      message = "Updates Waiting for Review";
-      color = Colors.orange;
-    } else if (approved) {
-      message = "Verified Store";
-      color = Colors.green;
-    } else {
-      message = "Needs Initial Approval";
-      color = Colors.blue;
-    }
-
+  Widget _buildMiniStat(String label, dynamic value, Color color) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color)),
-      child: Row(
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withOpacity(0.2))),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(status == "pending" ? Icons.update : (approved ? Icons.verified : Icons.info_outline), color: color),
-          const SizedBox(width: 10),
-          Text(message,
-              style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+          Text("$value", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          Text(label, style: TextStyle(fontSize: 10, color: color.withOpacity(0.8), fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-
-
-  Widget _buildInfoTile(String label, String value, IconData icon) {
-    return ListTile(
-      leading: Icon(icon, color: primaryGreen, size: 20),
-      title:
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-      subtitle: Text(value,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-      dense: true,
+  Widget _buildPersistentTabs() {
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _SliverAppBarDelegate(
+        TabBar(
+          controller: _tabController,
+          indicatorSize: TabBarIndicatorSize.label,
+          labelColor: primaryGreen,
+          unselectedLabelColor: Colors.grey,
+          indicator: UnderlineTabIndicator(borderSide: BorderSide(width: 3, color: primaryGreen), insets: const EdgeInsets.symmetric(horizontal: 16)),
+          tabs: const [Tab(text: "Products"), Tab(text: "Rentals"), Tab(text: "History")],
+        ),
+      ),
     );
   }
 
-  Widget _buildModernHeader(Map<String, dynamic> data) {
-    return SliverAppBar(
-      expandedHeight: 180,
-      pinned: true,
-      backgroundColor: primaryGreen,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
+  Widget _buildProductGrid() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('products').where('sellerId', isEqualTo: widget.sellerId).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
+        final items = snapshot.data!.docs.map((d) => Product.fromDocument(d)).where((p) => p.isRental == (_tabController.index == 1)).toList();
+
+        if (items.isEmpty) return const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(40), child: Center(child: Text("No inventory found."))));
+
+        return SliverPadding(
+          padding: const EdgeInsets.all(20),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.75, crossAxisSpacing: 15, mainAxisSpacing: 15),
+            delegate: SliverChildBuilderDelegate((c, i) => _buildProductCard(items[i]), childCount: items.length),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProductCard(Product p) {
+    return InkWell(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminProductFullView(imageUrls: p.imageUrl, productName: p.name, shortDescription: p.description, price: p.price, categoryName: p.category, productId: p.id, isRental: p.isRental, rating: p.avgRate))),
+      child: Container(
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade200)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Image.network(data['backgroundImage'] ?? '',
-                fit: BoxFit.cover,
-                errorBuilder: (c, e, s) => Container(color: Colors.grey)),
-            Container(color: Colors.black26),
-            Center(
-              child: CircleAvatar(
-                radius: 46,
-                backgroundColor: Colors.white,
-                child: CircleAvatar(
-                    radius: 43,
-                    backgroundImage: NetworkImage(data['storeLogo'] ?? '')),
+            Expanded(child: ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(15)), child: Image.network(p.imageUrl[0], fit: BoxFit.cover, width: double.infinity))),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text("Rs ${p.price}", style: TextStyle(color: primaryGreen, fontWeight: FontWeight.w800, fontSize: 14)),
+                ],
               ),
             )
           ],
@@ -573,32 +453,112 @@ class _AdminStoreReviewScreenState extends State<AdminStoreReviewScreen>
     );
   }
 
-  Widget _buildModernProfileInfo(Map<String, dynamic> data) {
-    return Column(
-      children: [
-        Text(data['storeName'] ?? "Store Name",
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text("Seller: ${data['name'] ?? 'Unknown'}",
-            style: const TextStyle(color: Colors.grey)),
-      ],
+  Widget _buildFinanceList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('withdrawRequests').where('sellerId', isEqualTo: widget.sellerId).orderBy('createdAt', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
+        return SliverList(
+          delegate: SliverChildBuilderDelegate((c, i) {
+            var doc = snapshot.data!.docs[i];
+            bool isApproved = doc['status'] == 'approved';
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  CircleAvatar(backgroundColor: isApproved ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1), child: Icon(isApproved ? Icons.check : Icons.history, color: isApproved ? Colors.green : Colors.orange)),
+                  const SizedBox(width: 15),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Withdrawal Request", style: const TextStyle(fontWeight: FontWeight.bold)), Text("Ref: ${doc.id.substring(0, 8)}", style: TextStyle(fontSize: 10, color: Colors.grey))])),
+                  Text("Rs ${doc['amount']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+            );
+          }, childCount: snapshot.data!.docs.length),
+        );
+      },
     );
   }
 
+  Widget _buildBottomDock() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('saller').doc(widget.sellerId).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        var data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+        bool isRestricted = data['isSellerRestricted'] ?? false;
+        String status = data['storeStatus'] ?? "";
 
+        return Container(
+          height: 90,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))]),
+          child: Row(
+            children: [
+              if (status == "pending") ...[
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _updateStatus(updates: {'isAdminApproved': true, 'storeStatus': 'editable'}, title: "Store Approved", category: "approved", storeName: data['storeName']),
+                    style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 15)),
+                    child: const Text("APPROVE STORE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _updateStatus(updates: {'isSellerRestricted': !isRestricted}, title: isRestricted ? "Merchant Restored" : "Merchant Blocked", category: isRestricted ? "active" : "restricted", storeName: data['storeName']),
+                  style: OutlinedButton.styleFrom(side: BorderSide(color: isRestricted ? Colors.green : Colors.orange), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 15)),
+                  child: Text(isRestricted ? "UNBLOCK" : "BLOCK", style: TextStyle(color: isRestricted ? Colors.green : Colors.orange, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: IconButton(onPressed: _showDeleteConfirmation, icon: const Icon(Icons.delete_outline, color: Colors.red)),
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _updateStatus({required Map<String, dynamic> updates, required String title, required String category, required String storeName}) async {
+    try {
+      await FirebaseFirestore.instance.collection('saller').doc(widget.sellerId).update(updates);
+      await sendNotification(senderRole: "admin", senderId: "admin", sellerId: widget.sellerId, userId: null, title: title, body: "Admin has updated your account status.", type: "store", category: category, actionId: widget.sellerId);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(title), behavior: SnackBarBehavior.floating, backgroundColor: primaryGreen));
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
 }
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
-  final Widget _tabBar;
+
+  final TabBar _tabBar;
+
+  // Ensure min and max are exactly the same to avoid layout extent calculation errors
   @override
-  double get minExtent => 48.0;
+  double get minExtent => _tabBar.preferredSize.height;
+
   @override
-  double get maxExtent => 48.0;
+  double get maxExtent => _tabBar.preferredSize.height;
+
   @override
-  Widget build(
-          BuildContext context, double shrinkOffset, bool overlapsContent) =>
-      _tabBar;
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Material(
+      color: Colors.white,
+      elevation: overlapsContent ? 4 : 0, // Adds a slight shadow when content scrolls under
+      child: _tabBar,
+    );
+  }
+
   @override
-  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
+  }
 }

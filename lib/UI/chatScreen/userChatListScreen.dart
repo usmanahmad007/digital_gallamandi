@@ -1,12 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'chatScreen.dart';
 
 class UserChatListScreen extends StatefulWidget {
-  final String currentUserId;
-
-  const UserChatListScreen({required this.currentUserId, super.key});
+  const UserChatListScreen({super.key});
 
   @override
   _UserChatListScreenState createState() => _UserChatListScreenState();
@@ -14,88 +13,41 @@ class UserChatListScreen extends StatefulWidget {
 
 class _UserChatListScreenState extends State<UserChatListScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  Map<String, String> sellerNamesCache = {};
+  Map<String, Map<String, String>> sellerCache = {};
   bool isFetchingSellerNames = false;
+  String? currentUserId;
 
-  // Optimized Deletion
+  @override
+  void initState() {
+    super.initState();
+    currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  }
+
   Future<void> _deleteChat(String chatId) async {
     try {
+      // Note: This deletes metadata. In a full production app,
+      // you might also want to delete the sub-collection messages.
       await _firestore.collection('chats').doc(chatId).delete();
     } catch (e) {
       debugPrint('Error deleting chat: $e');
     }
   }
-  // 1. Define your professional color palette
-  final List<Color> _avatarPalette = [
-    Colors.blue.shade600,
-    Colors.green.shade600,
-    Colors.orange.shade600,
-    Colors.purple.shade600,
-    Colors.teal.shade600,
-    Colors.pink.shade600,
-    Colors.indigo.shade600,
-  ];
-
-  // 2. This helper picks a color based on the name so it stays consistent
-  Color _getConsistentColor(String name) {
-    if (name.isEmpty || name == "Loading...") return Colors.grey;
-    // Uses the name's unique hash to pick an index from the list
-    int index = name.hashCode.abs() % _avatarPalette.length;
-    return _avatarPalette[index];
-  }
-
-  // 3. The updated UI widget
-  Widget _buildAvatar(String name) {
-    final Color profileColor = _getConsistentColor(name);
-
-    return CircleAvatar(
-      radius: 28,
-      backgroundColor: profileColor.withOpacity(0.1), // Soft background
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : "?",
-        style: TextStyle(
-          color: profileColor, // Strong text color
-          fontWeight: FontWeight.bold,
-          fontSize: 22,
-        ),
-      ),
-    );
-  }
-
-  // Returns Future<bool?> to satisfy Dismissible requirement
-  Future<bool?> _confirmDelete(BuildContext context) async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text('Remove Chat?'),
-        content: const Text('Do you want to delete this conversation?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _fetchAllSellerNames(List<String> sellerIds) async {
     if (isFetchingSellerNames || sellerIds.isEmpty) return;
     isFetchingSellerNames = true;
-
     try {
       final sellerDocs = await _firestore
-          .collection('saller') // Matches your 'saller' collection name
+          .collection('saller')
           .where(FieldPath.documentId, whereIn: sellerIds)
           .get();
 
       for (var doc in sellerDocs.docs) {
-        sellerNamesCache[doc.id] = doc['name'] ?? 'Store';
+        final data = doc.data();
+        sellerCache[doc.id] = {
+          'name': data['name'] ?? 'Store',
+          'profileImage': data['profileImage'] ?? '',
+        };
       }
       if (mounted) setState(() {});
     } catch (e) {
@@ -116,8 +68,9 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
         elevation: 0.5,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('chats')
-            .where('userId', isEqualTo: widget.currentUserId)
+        stream: _firestore
+            .collection('chats')
+            .where('userId', isEqualTo: currentUserId)
             .orderBy('lastUpdate', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -130,7 +83,6 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
           }
 
           final chatDocs = snapshot.data!.docs;
-
           final sellerIds = chatDocs
               .map((doc) => (doc.data() as Map<String, dynamic>)['sellerId'])
               .where((id) => id != null)
@@ -138,7 +90,7 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
               .toList()
               .cast<String>();
 
-          if (sellerNamesCache.isEmpty && !isFetchingSellerNames) {
+          if (sellerCache.isEmpty && !isFetchingSellerNames) {
             _fetchAllSellerNames(sellerIds);
           }
 
@@ -148,16 +100,19 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
             separatorBuilder: (context, index) => const Divider(height: 1, indent: 80, endIndent: 20),
             itemBuilder: (context, index) {
               final chatData = chatDocs[index].data() as Map<String, dynamic>;
-              final messages = chatData['messages'] as List? ?? [];
-              final lastMsg = messages.isNotEmpty ? messages.last : null;
-
               final sellerId = chatData['sellerId'] ?? "";
-              final sellerName = sellerNamesCache[sellerId] ?? "Loading...";
 
-              // Unread logic: Last message exists AND it wasn't sent by me AND isRead is false
-              final isUnread = lastMsg != null &&
-                  lastMsg['sender'] != widget.currentUserId &&
-                  lastMsg['isRead'] == false;
+              // --- Metadata Logic ---
+              final String lastMsg = chatData['lastMessage'] ?? "Start a conversation";
+              final dynamic lastUpdate = chatData['lastUpdate'];
+              final String lastSender = chatData['lastMessageSender'] ?? "";
+              final bool isRead = chatData['isLastMessageRead'] ?? false;
+
+              final bool isMe = lastSender == currentUserId;
+              final bool isUnreadForMe = !isMe && !isRead;
+              debugPrint("$isMe/$isRead/$isUnreadForMe");
+
+              final sellerData = sellerCache[sellerId] ?? {'name': 'Loading...', 'profileImage': ''};
 
               return Dismissible(
                 key: Key(chatDocs[index].id),
@@ -168,55 +123,60 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
                   padding: const EdgeInsets.only(right: 20),
                   child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
                 ),
-                confirmDismiss: (direction) async {
-                  return await _confirmDelete(context);
-                },
+                confirmDismiss: (direction) async => await _confirmDelete(context),
                 onDismissed: (direction) => _deleteChat(chatDocs[index].id),
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: _buildAvatar(sellerName),
+                  leading: _buildAvatar(sellerData['name']!, sellerData['profileImage']),
                   title: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         child: Text(
-                          sellerName,
+                          sellerData['name']!,
                           style: TextStyle(
-                            fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
+                            fontWeight: isUnreadForMe ? FontWeight.bold : FontWeight.w600,
                             fontSize: 16,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (lastMsg != null)
-                        Text(
-                          _formatTime(lastMsg['timestamp']),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isUnread ? Colors.blue : Colors.grey,
-                            fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
-                          ),
+                      Text(
+                        _formatTime(lastUpdate),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isUnreadForMe ? Colors.blue : Colors.grey,
                         ),
+                      ),
                     ],
                   ),
                   subtitle: Row(
                     children: [
+
+                        Icon(
+                          isRead ? Icons.done_all : Icons.check,
+                          size: 16,
+                          color: isRead ? Colors.blue : Colors.grey,
+                        ),
+                        const SizedBox(width: 4),
+
                       Expanded(
                         child: Text(
-                          lastMsg?['text'] ?? "Start a conversation",
+                          lastMsg,
                           style: TextStyle(
-                            color: isUnread ? Colors.black87 : Colors.grey[600],
-                            fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                            color: isUnreadForMe ? Colors.black87 : Colors.grey[600],
+                            fontWeight: isUnreadForMe ? FontWeight.bold : FontWeight.normal,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isUnread)
+                      if (isUnreadForMe)
                         Container(
                           margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.all(5),
+                          width: 10,
+                          height: 10,
                           decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
                         ),
                     ],
@@ -226,9 +186,9 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => ChatScreen(
-                          currentUserId: widget.currentUserId,
-                          productId: chatData['productId'],
-                          productName: chatData['productName'],
+                          currentUserId: currentUserId!,
+                          productId: chatData['productId'] ?? '',
+                          productName: chatData['productName'] ?? '',
                           sellerId: sellerId,
                         ),
                       ),
@@ -243,6 +203,19 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
     );
   }
 
+  // --- UI Helper Methods ---
+
+  Widget _buildAvatar(String name, String? imageUrl) {
+    return CircleAvatar(
+      radius: 28,
+      backgroundColor: Colors.blue.withOpacity(0.1),
+      backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
+      child: (imageUrl == null || imageUrl.isEmpty)
+          ? Text(name.isNotEmpty ? name[0].toUpperCase() : "?",
+          style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 22))
+          : null,
+    );
+  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -257,23 +230,31 @@ class _UserChatListScreenState extends State<UserChatListScreen> {
     );
   }
 
-  // Same robust time logic to prevent "int is not subtype of Timestamp"
   String _formatTime(dynamic timestamp) {
-    if (timestamp == null) return "Just now";
-
-    DateTime date;
-    if (timestamp is Timestamp) {
-      date = timestamp.toDate();
-    } else if (timestamp is int) {
-      date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    } else {
-      return "";
-    }
-
+    if (timestamp == null) return "";
+    DateTime date = (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now();
     final now = DateTime.now();
     if (date.day == now.day && date.month == now.month && date.year == now.year) {
       return DateFormat.jm().format(date);
     }
     return DateFormat.MMMd().format(date);
+  }
+
+  Future<bool?> _confirmDelete(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('Remove Chat?'),
+        content: const Text('Do you want to delete this conversation?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 }

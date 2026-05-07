@@ -67,14 +67,15 @@ class _SignupscreenState extends State<Signupscreen> {
             'email': _emailController.text,
             'profileImage': null,
             'timestamp': FieldValue.serverTimestamp(),
+            'userStatus': 'approved',
           };
           if (_isAcceptedAdmin) {
             userData['type'] = "seller";
             userData['balance'] = 0;            // withdrawable
-           /* userData['onHold'] = 0;             // processing orders
+            userData['onHold'] = 0;             // processing orders
             userData['totalEarnings'] = 0;      // lifetime earnings
             userData['totalWithdrawn'] = 0;     // total withdrawn
-            userData['pendingWithdrawal'] = 0; */ // withdrawal requested
+            userData['pendingWithdrawal'] = 0;  // withdrawal requested
 
             userData['isAdminApproved'] = false;
             userData['isSellerRestricted'] = false;

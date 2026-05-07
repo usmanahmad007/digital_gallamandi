@@ -165,11 +165,46 @@ class _customerProductfullviewState extends State<customerProductfullview> {
   void _uploadProduct() async {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
-      final cartRef = FirebaseFirestore.instance.collection('users').doc(userId).collection('addToCart');
+      if (userId == null) return;
+
+      // 1. Fetch current User Status from Firestore
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      String userStatus = userDoc['userStatus'] ?? 'restricted';
+
+      // 2. Check if status is "approved"
+      if (userStatus != 'approved') {
+        if (userStatus == 'restricted') {
+          _showModernToast(
+              'Action restricted. Your account is currently restricted. Some features may be limited.',
+              false
+          );
+        } else if (userStatus == 'blocked') {
+          _showModernToast(
+              'Action blocked. Your account is currently suspended. You cannot place orders or add items to the cart.',
+              false
+          );
+        } else {
+          // This handles 'pending' or any other unexpected status
+          _showModernToast(
+              'Action unavailable. Your account status is currently: $userStatus.',
+              false
+          );
+        }
+        return; // Stop execution here for any non-approved status
+      }
+
+      // 3. Proceed with Add to Cart logic if approved
+      final cartRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('addToCart');
 
       final existingProductQuery = await cartRef
-          .where('title', isEqualTo: widget.productName)
-          .where('sallerId', isEqualTo: widget.sellerId)
+          .where('productId', isEqualTo: widget.id) // Using ID is safer than title
           .get();
 
       if (existingProductQuery.docs.isNotEmpty) {

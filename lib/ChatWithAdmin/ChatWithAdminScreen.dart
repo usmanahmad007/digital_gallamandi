@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../Admin/Admin Home/support/AdminChatService.dart';
+import '../Notification/send_notification.dart';
 
 class ChatWithAdminScreen extends StatefulWidget {
   const ChatWithAdminScreen({super.key});
@@ -28,7 +29,7 @@ class _ChatWithAdminScreenState extends State<ChatWithAdminScreen> {
     userId = FirebaseAuth.instance.currentUser!.uid;
     chatId = "${userId}_admin";
 
-    chatService.createChatIfNotExists(chatId, userId);
+
 
     FirebaseFirestore.instance
         .collection("messages")
@@ -36,12 +37,16 @@ class _ChatWithAdminScreenState extends State<ChatWithAdminScreen> {
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
+      if(snapshot.docs.isEmpty){
+        chatService.createChatIfNotExists(chatId, userId);
+      }
 
       if (snapshot.docs.isNotEmpty) {
         var lastMsg = snapshot.docs.last;
 
         // Only mark as seen if message is from ADMIN
         if (lastMsg["senderId"] != userId && lastMsg["isSeen"] == false) {
+
           chatService.markMessagesAsSeen(chatId, userId);
         }
       }
@@ -69,12 +74,27 @@ class _ChatWithAdminScreenState extends State<ChatWithAdminScreen> {
     });
   }
 
+
   Future pickImage() async {
     final picker = ImagePicker();
     final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
 
     if (file != null) {
+      // 1. Upload and send the image message
       await chatService.sendImage(File(file.path), chatId, userId);
+
+      // 2. Trigger notification for Admin
+      await sendAdminNotification(
+        senderRole: "customer",
+        senderId: userId,
+        sellerId: userId,
+        title: "Support Request (Image)",
+        body: "Sent a photo 📷",
+        type: "message",
+        category: "admin_support", // Useful for admin filtering
+        actionId: chatId,         // So admin can click and open this specific chat
+      );
+
       _scrollToBottom(isInitial: false);
     }
   }
@@ -265,6 +285,16 @@ class _ChatWithAdminScreenState extends State<ChatWithAdminScreen> {
                 String text = controller.text.trim();
                 controller.clear();
                 await chatService.sendText(text, chatId, userId);
+                await sendAdminNotification(
+                  sellerId: userId,
+                  senderRole: "admin",
+                  senderId: userId,
+                  title: "New Message from Customer",
+                  body: text,
+                  type: "message",
+                  category: "admin_support",
+                  actionId: chatId,
+                );
                 _scrollToBottom(isInitial: false);
               },
             ),

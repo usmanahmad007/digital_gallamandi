@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:zrai_mart/Notification/send_notification.dart';
 import '../../../app_colors.dart';
 import '../../../saller center/orderScreen/ProductDetailsScreen.dart';
-import 'AdminProductDetailsScreen.dart';
 
 class AdminOrdersScreen extends StatefulWidget {
   const AdminOrdersScreen({super.key});

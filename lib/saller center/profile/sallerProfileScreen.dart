@@ -5,6 +5,7 @@ import 'package:zrai_mart/ChatWithAdmin/ChatWithAdminScreen.dart';
 import 'package:zrai_mart/Notification/Notification.dart';
 import 'package:zrai_mart/UI/auth/signInScreen.dart';
 import 'package:zrai_mart/saller%20center/profile/sallerEditProfileScreen.dart';
+import 'package:zrai_mart/saller%20center/profile/withdrawRequest.dart';
 import 'package:zrai_mart/saller%20center/storeView/StooreSettingcreen.dart';
 import 'package:zrai_mart/saller%20center/storeView/StorePreviewScreen.dart';
 
@@ -32,7 +33,11 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
   String _name = 'Loading...';
   String _email = 'Loading...';
   var profileImageUrl;
-  String Balance = '0.0';
+  double balance = 0;
+  double onHold = 0;
+  double totalEarning = 0;
+  double totalWithdrawn = 0;
+  double pendingWithdrawal = 0;
 
   @override
   void initState() {
@@ -42,50 +47,31 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
 
   Future<void> _fetchUserData() async {
     User? user = _auth.currentUser;
-
     if (user == null) return;
 
     try {
-
-      /// Get seller profile
       DocumentSnapshot userDoc =
       await _firestore.collection('saller').doc(user.uid).get();
 
       if (userDoc.exists) {
-        _name = userDoc['name'] ?? 'No name';
-        _email = userDoc['email'] ?? 'No email';
-        profileImageUrl = userDoc['profileImage'];
+        final data = userDoc.data() as Map<String, dynamic>;
+
+        setState(() {
+          _name = data['name'] ?? 'No name';
+          _email = data['email'] ?? 'No email';
+          profileImageUrl = data['profileImage'];
+
+          /// MONEY FIELDS (DOUBLE SAFE)
+          balance = (data['balance'] ?? 0).toDouble();
+
+          totalEarning = (data['totalEarnings'] ?? 0).toDouble();
+          onHold = (data['onHold'] ?? 0).toDouble();
+          totalWithdrawn = (data['totalWithdrawn'] ?? 0).toDouble();
+          pendingWithdrawal = (data['pendingWithdrawal'] ?? 0).toDouble();
+        });
       }
-
-      /// Query orders where sellerId == currentUser
-      QuerySnapshot orderSnapshot = await _firestore
-          .collection('orders')
-          .where('sellerId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'completed')
-          .get();
-
-      double totalProfit = 0;
-
-      for (var order in orderSnapshot.docs) {
-        final data = order.data() as Map<String, dynamic>;
-
-        double price = 0;
-
-        if (data['totalPrice'] is int) {
-          price = (data['totalPrice'] as int).toDouble();
-        } else if (data['totalPrice'] is double) {
-          price = data['totalPrice'];
-        }
-
-        totalProfit += price;
-      }
-
-      setState(() {
-        Balance = totalProfit.toStringAsFixed(2);
-      });
-
     } catch (e) {
-      print("Error fetching seller balance: $e");
+      print("Error fetching seller data: $e");
     }
   }
 
@@ -99,6 +85,9 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
   }
   void handleStoreCustomerViewTap() {
     Navigator.push(context, MaterialPageRoute(builder: (context) => StorePreviewScreen(sellerId: _auth.currentUser!.uid,)));
+  }
+  void handleWithdrawTap() {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => WithdrawScreen(sellerId: _auth.currentUser!.uid,)));
   }
   void handleLanguageTap() => Navigator.push(context, MaterialPageRoute(builder: (context) => const LanguageSelectionScreen()));
   void handlePrivacyPolicyTap() => Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()));
@@ -184,20 +173,39 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: AppColors.primaryGreen.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryGreen.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    )
+                  ],
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const Text(
+                      "Wallet Overview",
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(height: 15),
+
+                    /// GRID
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("Total Earned", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                        const SizedBox(height: 5),
-                        Text("PKR $Balance", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                        _walletItem("Earnings", totalEarning),
+                        _walletItem("Balance", balance),
                       ],
                     ),
-                    const Icon(Icons.account_balance_wallet_outlined, color: Colors.white, size: 40),
+                    const SizedBox(height: 15),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _walletItem("On Hold", onHold),
+                        _walletItem("Withdrawn", totalWithdrawn),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -223,14 +231,14 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
 
                   _buildProfileTile(Icons.store, "Store Settings", handleStoreTap),
                   _buildProfileTile(Icons.store, "Store Customer View", handleStoreCustomerViewTap),
-
+                  _buildProfileTile(Icons.payment, "Withdraw Request", handleWithdrawTap),
                   _buildProfileTile(Icons.notifications_none_outlined, "Notifications", handleNotificationTap),
                   _buildProfileTile(Icons.translate, "Language", handleLanguageTap),
                   _buildProfileTile(Icons.security_outlined, "Privacy Policy", handlePrivacyPolicyTap),
                   _buildProfileTile(Icons.help_outline, "Help Center", handleHelpCenterTap),
                   const Divider(indent: 20, endIndent: 20),
 
-                  _buildProfileTile(Icons.mark_chat_read, "Write to Admin", handleAdminChatTap,),
+                  _buildProfileTile(Icons.support_agent, "Customer Support 24/7", handleAdminChatTap,),
 
                   const Divider(indent: 20, endIndent: 20),
                   _buildProfileTile(Icons.logout, "Logout", handleLogoutTap, isLogout: true),
@@ -257,6 +265,26 @@ class _sallerProfilescreenState extends State<sallerProfilescreen> {
       title: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: isLogout ? Colors.red : AppColors.textDark)),
       trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textGrey),
       onTap: onTap,
+    );
+  }
+  Widget _walletItem(String title, double value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          "PKR ${value.toStringAsFixed(2)}",
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,5 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/Admin/Admin%20Home/support/AdminChatListScreen.dart';
+import 'package:zrai_mart/Admin/Admin%20Home/support/AdminChatScreen.dart';
+import 'package:zrai_mart/ChatWithAdmin/ChatWithAdminScreen.dart';
+import 'package:zrai_mart/UI/chatScreen/userChatListScreen.dart';
+import 'package:zrai_mart/saller%20center/chatScreen/sellerChatListScreen.dart';
 import 'NotificationDetailScreen.dart';
 
 class UniversalNotificationScreen extends StatelessWidget {
@@ -20,8 +25,10 @@ class UniversalNotificationScreen extends StatelessWidget {
     if (userRole == 'admin') {
       query = query.where('isAdmin', isEqualTo: true);
     } else if (userRole == 'seller') {
+      debugPrint("sellerId Query Runned");
       query = query.where('sellerId', isEqualTo: currentUserId);
     } else {
+      debugPrint("userId Query Runned");
       query = query.where('userId', isEqualTo: currentUserId);
     }
 
@@ -134,6 +141,18 @@ class UniversalNotificationScreen extends StatelessWidget {
         color = Colors.teal;
         break;
 
+    // --- NEW TYPES ADDED HERE ---
+      case 'payment':
+        icon = Icons.account_balance_wallet_outlined;
+        color = Colors.green; // Success/Money color
+        break;
+
+      case 'message':
+        icon = Icons.chat_bubble_outline_rounded;
+        color = Colors.indigo; // Communication color
+        break;
+    // ----------------------------
+
       default:
         icon = Icons.notifications_active_outlined;
         color = Colors.purple;
@@ -170,16 +189,32 @@ class UniversalNotificationScreen extends StatelessWidget {
     final String actionId = data['actionId'] ?? '';
 
     if (context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => NotificationDetailScreen(
-            type: type,
-            actionId: actionId,
-            notificationData: data,
+      if(type=='message'){
+
+        if (userRole == 'seller' && data['senderRole']=='customer') {
+          Navigator.push(context, MaterialPageRoute(builder: (context)=>const SellerChatListScreen()));
+          return;
+        } else if(userRole=='customer' && data['senderRole']=='seller') {
+          Navigator.push(context, MaterialPageRoute(builder: (context)=>const UserChatListScreen()));
+          return;
+        } else if(data['senderRole']=='admin'){
+          Navigator.push(context, MaterialPageRoute(builder: (context)=>const ChatWithAdminScreen()));
+        }
+
+
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                NotificationDetailScreen(
+                  type: type,
+                  actionId: actionId,
+                  notificationData: data,
+                ),
           ),
-        ),
-      );
+        );
+      }
     }
   }
 

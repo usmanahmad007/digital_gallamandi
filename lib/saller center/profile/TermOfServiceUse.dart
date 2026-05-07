@@ -31,9 +31,9 @@ class TermsOfServiceScreen extends StatelessWidget {
           children: [
 
             const Text(
-              "Welcome to Zrai Mart",
+              "Welcome to Digital Galla Mandi",
               style: TextStyle(
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textDark,
               ),

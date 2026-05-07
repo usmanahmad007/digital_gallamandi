@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:zrai_mart/Admin/Admin%20Home/support/AdminChatListScreen.dart';
 
 class NotificationDetailScreen extends StatelessWidget {
   final String type;
@@ -16,7 +17,6 @@ class NotificationDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 Normalize the type to avoid matching errors (e.g., "Order " vs "order")
     final String cleanType = type.toLowerCase().trim();
 
     return Scaffold(
@@ -40,21 +40,95 @@ class NotificationDetailScreen extends StatelessWidget {
             const Divider(),
             const SizedBox(height: 10),
 
-            // --- Dynamic Content Logic ---
+            // --- Updated Dynamic Content Logic ---
             if (cleanType == 'order' && actionId.isNotEmpty)
               _buildOrderDetails()
             else if (cleanType == 'store')
               _buildStoreDetails()
             else if (cleanType == 'product' && actionId.isNotEmpty)
                 _buildProductDetails()
-              else
-                _buildDefaultDetails(cleanType), // Pass type for debugging
+              else if (cleanType == 'payment') // New Payment Logic
+                  _buildPaymentDetails()
+                else if (cleanType == 'message' || cleanType == 'chat') // New Message Logic
+                    _buildMessageDetails(context)
+                  else
+                    _buildDefaultDetails(cleanType),
           ],
         ),
       ),
     );
   }
 
+  // --- NEW: Payment / Withdrawal Details ---
+  Widget _buildPaymentDetails() {
+    final String category = (notificationData['category'] ?? "").toString();
+    final String sellerId = (notificationData['sellerId'] ?? "N/A").toString();
+
+    return Column(
+      children: [
+        _buildDetailCard([
+          _buildInfoRow("Transaction Type", category.toUpperCase()),
+          _buildInfoRow("Reference ID", actionId, canCopy: true),
+          _buildInfoRow("Seller ID", sellerId, canCopy: true),
+          _buildInfoRow("Request Date", _formatTimestamp(notificationData['timestamp'])),
+        ]),
+        const SizedBox(height: 20),
+        if (category == 'withdrawal')
+          Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Please navigate to the Withdrawal Management section to approve or reject this request.",
+                    style: TextStyle(fontSize: 13, color: Colors.blue),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // --- NEW: Message / Chat Quick Link ---
+  Widget _buildMessageDetails(BuildContext context) {
+    return Column(
+      children: [
+        _buildDetailCard([
+          _buildInfoRow("From", notificationData['senderRole']?.toString().toUpperCase() ?? "USER"),
+          _buildInfoRow("Sender ID", notificationData['senderId'] ?? "N/A", canCopy: true),
+          _buildInfoRow("Received At", _formatTimestamp(notificationData['timestamp'])),
+        ]),
+        const SizedBox(height: 30),
+        SizedBox(
+          width: double.infinity,
+          height: 55,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminChatListScreen()));
+            },
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: const Text("Open Chat Center", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- Existing Order Details ---
   Widget _buildOrderDetails() {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('orders').doc(actionId).get(),
@@ -72,7 +146,6 @@ class NotificationDetailScreen extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Premium Product Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -98,7 +171,7 @@ class NotificationDetailScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(data['title'] ?? "Product",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18,),overflow: TextOverflow.ellipsis,),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18,),overflow: TextOverflow.ellipsis,),
                         const SizedBox(height: 4),
                         Text("PKR ${data['totalPrice']}",
                             style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 18)),
@@ -109,10 +182,7 @@ class NotificationDetailScreen extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // 2. Delivery Section with Icon
             _buildSectionTitle(Icons.local_shipping_outlined, "Delivery Details"),
             const SizedBox(height: 12),
             _buildDetailCard([
@@ -120,27 +190,14 @@ class NotificationDetailScreen extends StatelessWidget {
               _buildInfoRow("Contact", data['phoneNumber'] ?? "N/A"),
               _buildInfoRow("Address", "${data['address']}, ${data['city']}"),
             ]),
-
             const SizedBox(height: 24),
-
-            // 3. Payment Section with Icon
             _buildSectionTitle(Icons.payments_outlined, "Payment Information"),
             const SizedBox(height: 12),
             _buildDetailCard([
               _buildInfoRow("Method", "Online Payment", isVerified: true),
-              _buildInfoRow("Order ID", actionId, canCopy: true), // Added copy functionality
+              _buildInfoRow("Order ID", actionId, canCopy: true),
               _buildInfoRow("Date", _formatTimestamp(data['orderDate'])),
-
-              if ((notificationData['category'] == 'cancelled' || notificationData['category'] == 'returned') &&
-                  data['reason'] != null &&
-                  data['reason'].toString().trim().isNotEmpty)
-                _buildInfoRow(
-                    "Reason/Note",
-                    data['reason'],
-                    isWarning: true
-                ),
             ]),
-
             const SizedBox(height: 40),
           ],
         );
@@ -148,8 +205,8 @@ class NotificationDetailScreen extends StatelessWidget {
     );
   }
 
-  // --- Helper to show verified status for Payment ---
-  // Helper for Section Titles with Icons
+  // --- Utility Widgets ---
+
   Widget _buildSectionTitle(IconData icon, String title) {
     return Row(
       children: [
@@ -160,7 +217,6 @@ class NotificationDetailScreen extends StatelessWidget {
     );
   }
 
-// Fixed Info Row with "Copy" support and no overflow
   Widget _buildInfoRow(String label, String value, {bool isWarning = false, bool isVerified = false, bool canCopy = false}) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
@@ -185,8 +241,7 @@ class NotificationDetailScreen extends StatelessWidget {
             const SizedBox(width: 6),
             InkWell(
               onTap: () {
-                // Add: import 'package:flutter/services.dart';
-                 Clipboard.setData(ClipboardData(text: value));
+                Clipboard.setData(ClipboardData(text: value));
               },
               child: const Icon(Icons.copy_rounded, color: Colors.grey, size: 16),
             ),
@@ -197,7 +252,6 @@ class NotificationDetailScreen extends StatelessWidget {
     );
   }
 
-// Styled Status Badge
   Widget _statusSmallBadge(String status) {
     final isCompleted = status.toLowerCase() == 'completed';
     final color = isCompleted ? Colors.green : Colors.orange;
@@ -216,41 +270,26 @@ class NotificationDetailScreen extends StatelessWidget {
     );
   }
 
-  // --- Helper Widgets for the Layout ---
-
   Widget _buildDetailCard(List<Widget> children) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        // Use a soft shadow instead of a hard border for a "floating" look
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 6)),
         ],
-        // Optional: Very light border just for definition
         border: Border.all(color: Colors.grey.shade100, width: 1),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          children: [
-            // Adds a bit of padding at the top and bottom of the list
-            const SizedBox(height: 10),
-            ...children,
-            const SizedBox(height: 10),
-          ],
-        ),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          ...children,
+          const SizedBox(height: 10),
+        ],
       ),
     );
   }
-
-
-
 
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return "N/A";
@@ -260,159 +299,6 @@ class NotificationDetailScreen extends StatelessWidget {
     }
     return timestamp.toString();
   }
-
-  Widget _buildStoreDetails() {
-    final String rawCategory = (notificationData['category'] ?? "Update").toString();
-    final String category = rawCategory.toUpperCase();
-
-    // Determine Theme based on status
-    Color primaryColor;
-    Color bgColor;
-    IconData statusIcon;
-    String description;
-    bool isReadyToSell = false;
-
-    if (category == 'APPROVED' || category == 'ACTIVE') {
-      primaryColor = Colors.green.shade700;
-      bgColor = Colors.green.shade50;
-      statusIcon = Icons.check_circle_rounded;
-      description = "Congratulations! Your store is live. Customers can now browse your products and you can start earning money.";
-      isReadyToSell = true;
-    } else if (category == 'RESTRICTED') {
-      primaryColor = Colors.red.shade700;
-      bgColor = Colors.red.shade50;
-      statusIcon = Icons.report_problem_rounded;
-      description = "Your store access is limited due to policy violations. You cannot accept new orders or earn money until this is resolved.";
-    } else {
-      // Default / Pending / Update (Orange)
-      primaryColor = Colors.orange.shade800;
-      bgColor = Colors.orange.shade50;
-      statusIcon = Icons.storefront_rounded;
-      description = "Customers cannot see your products yet. Complete your setup to start selling on Zrai Mart and growing your income.";
-    }
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: primaryColor.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: primaryColor.withOpacity(0.1),
-            child: Icon(statusIcon, size: 45, color: primaryColor),
-          ),
-          const SizedBox(height: 16),
-
-          Text(
-            "STORE STATUS",
-            style: TextStyle(
-              letterSpacing: 1.2,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: primaryColor.withOpacity(0.6),
-            ),
-          ),
-          Text(
-            category,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12.0),
-            child: Divider(height: 1, thickness: 1),
-          ),
-
-          // Business Impact Section
-          Row(
-            children: [
-              Icon(
-                  isReadyToSell ? Icons.verified_user_rounded : Icons.monetization_on_outlined,
-                  size: 20,
-                  color: primaryColor
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isReadyToSell ? "You are ready to earn!" : "Your store is not ready to sell.",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blueGrey.shade900,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            description,
-            style: TextStyle(
-              color: Colors.blueGrey.shade700,
-              fontSize: 14,
-              height: 1.4,
-            ),
-          ),
-
-          // Action Hint for non-active stores
-          if (!isReadyToSell && category != 'RESTRICTED') ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.bolt, size: 16, color: primaryColor),
-                  const SizedBox(width: 4),
-                  Text(
-                    "Finish setup to go live",
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: primaryColor
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductDetails() {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: const Icon(Icons.inventory_2, color: Colors.teal),
-        title: const Text("Affected Product ID"),
-        subtitle: Text(actionId),
-      ),
-    );
-  }
-
-  // --- Helpers ---
 
   Widget _buildHeaderCard() {
     return Container(
@@ -436,7 +322,49 @@ class NotificationDetailScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildStoreDetails() {
+    final String rawCategory = (notificationData['category'] ?? "Update").toString();
+    final String category = rawCategory.toUpperCase();
 
+    Color primaryColor = Colors.orange.shade800;
+    Color bgColor = Colors.orange.shade50;
+    IconData statusIcon = Icons.storefront_rounded;
+
+    if (category == 'APPROVED' || category == 'ACTIVE') {
+      primaryColor = Colors.green.shade700;
+      bgColor = Colors.green.shade50;
+      statusIcon = Icons.check_circle_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: primaryColor.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(statusIcon, size: 45, color: primaryColor),
+          const SizedBox(height: 16),
+          Text(category, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: primaryColor)),
+          const SizedBox(height: 8),
+          Text(notificationData['body'] ?? "", textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductDetails() {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: const Icon(Icons.inventory_2, color: Colors.teal),
+        title: const Text("Affected Product ID"),
+        subtitle: Text(actionId),
+      ),
+    );
+  }
 
   Widget _buildErrorState(String msg) {
     return Center(
@@ -453,9 +381,7 @@ class NotificationDetailScreen extends StatelessWidget {
         children: [
           const Icon(Icons.search_off, size: 50, color: Colors.grey),
           const SizedBox(height: 10),
-          Text("No details for type: '$cleanType'"),
-          const Text("Verify that 'type' and 'actionId' are sent correctly.",
-              style: TextStyle(fontSize: 10, color: Colors.grey)),
+          Text("No extra details for: '$cleanType'"),
         ],
       ),
     );

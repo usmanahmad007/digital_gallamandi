@@ -24,6 +24,7 @@ class _ProfilescreenState extends State<Profilescreen> {
   String _name = '...';
   String _email = '...';
   String? profileImageUrl;
+  String _status = 'approved';
 
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _ProfilescreenState extends State<Profilescreen> {
           setState(() {
             _name = userDoc['name'] ?? 'User';
             _email = userDoc['email'] ?? '';
+            _status = userDoc['userStatus'] ?? 'approved';
             profileImageUrl = userDoc['profileImage'];
           });
         }
@@ -71,13 +73,14 @@ class _ProfilescreenState extends State<Profilescreen> {
               ],
             ),
             const SizedBox(height: 120), // Spacer for the floating card
-
             // 2. Settings Sections
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildStatusWarning(),
+
                   _buildSectionLabel("Account Settings"),
                   _buildSettingsGroup([
                     _buildSettingsTile(Icons.person_outline, "Edit Profile", () {
@@ -103,9 +106,10 @@ class _ProfilescreenState extends State<Profilescreen> {
                   ]),
 
                   const SizedBox(height: 25),
-                  _buildSectionLabel("Admin Complian/Support"),
+                  _buildSectionLabel("Support"),
+
                   _buildSettingsGroup([
-                    _buildSettingsTile(Icons.language_outlined, "Write To Admin", () {
+                    _buildSettingsTile(Icons.support_agent, "Customer Support 24/7", () {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatWithAdminScreen()));
                     }),
 
@@ -124,6 +128,50 @@ class _ProfilescreenState extends State<Profilescreen> {
     );
   }
 
+  Widget _buildStatusWarning() {
+    if (_status == 'approved') return const SizedBox.shrink();
+
+    bool isBlocked = _status == 'blocked';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: isBlocked ? Colors.red[50] : Colors.amber[50],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isBlocked ? Colors.red.shade100 : Colors.amber.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isBlocked ? Icons.block_flipped : Icons.warning_amber_rounded,
+            color: isBlocked ? Colors.red : Colors.amber[800],
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isBlocked ? "Account Blocked" : "Account Restricted",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isBlocked ? Colors.red[900] : Colors.amber[900],
+                  ),
+                ),
+                Text(
+                  isBlocked
+                      ? "You cannot place orders or use the cart."
+                      : "Some features may be limited. Contact support.",
+                  style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Widget _buildHeaderGradient(Color primary) {
     return Container(
       height: 200,

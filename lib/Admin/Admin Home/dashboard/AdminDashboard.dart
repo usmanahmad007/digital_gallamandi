@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:zrai_mart/Admin/Admin%20Home/AdminNotification.dart';
 import 'package:zrai_mart/Admin/Admin%20Home/AdminPanelScreen.dart';
 import 'package:zrai_mart/Admin/Admin%20Home/category/AdminCategoryScreen.dart';
 import 'package:zrai_mart/Admin/Admin%20Home/coupons/AdminCouponScreen.dart';
@@ -9,6 +10,8 @@ import '../../../saller center/orderScreen/ProductDetailsScreen.dart';
 import '../orderScreen/AdminOrdersScreen.dart';
 import '../product/AdminProductScreen.dart';
 import '../seller/AdminSellersScreen.dart';
+import '../user/admin_users_screen.dart';
+import '../withdrawRequest/AdminWithdrawPanel.dart';
 import 'AdminBackend.dart';
 import '../../../app_colors.dart';
 
@@ -113,7 +116,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                          Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminSellersScreen()));
                       }),
                       _moduleTile("Users", Icons.people, Colors.blue, () {
-                        // Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminUsersScreen()));
+                         Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminUsersScreen()));
                       }),
                       _moduleTile("Orders", Icons.shopping_cart, Colors.orange, () {
                         Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminOrdersScreen()));
@@ -134,13 +137,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       _moduleTile("Slider", Icons.linear_scale, Colors.amber, () {
                         // Add your Slider Screen here
                       }),
-                      _moduleTile("Chats", Icons.chat, Colors.cyan, () {
+                      _moduleTile("Customer Support", Icons.chat, Colors.cyan, () {
                         // Add your Chats Screen here
                         Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminChatListScreen()));
                       }),
+
                       _moduleTile("Notify", Icons.notifications_active, Colors.cyan, () {
                         // Add your Chats Screen here
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => const UniversalNotificationScreen(currentUserId: 'admin', userRole: 'admin')));
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminNotificationScreen()));
+                      }),_moduleTile("Withdrawal Request", Icons.payment, Colors.cyan, () {
+                        // Add your Chats Screen here
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminWithdrawPanel()));
                       }),
 
                     ]),
@@ -224,6 +231,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(15),
       child: Container(
+        // Added padding so text doesn't touch the edges of the box
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
@@ -242,10 +251,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
             const SizedBox(height: 8),
             Text(
               title,
+              textAlign: TextAlign.center, // Center text for multi-line support
+              maxLines: 2,                 // Allow up to 2 lines
+              overflow: TextOverflow.ellipsis, // Add "..." if name is still too long
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
+                height: 1.2,               // Tighten line height for multi-line
               ),
             ),
           ],

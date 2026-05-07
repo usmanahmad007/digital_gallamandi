@@ -1,37 +1,68 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
 import 'AdminChatScreen.dart';
 
 class AdminChatListScreen extends StatelessWidget {
   const AdminChatListScreen({super.key});
 
+  // 🕒 FORMAT TIME
+  String _formatTime(Timestamp? timestamp) {
+    if (timestamp == null) return "";
+
+    DateTime date = timestamp.toDate();
+    DateTime now = DateTime.now();
+
+    // Today → show time
+    if (date.day == now.day &&
+        date.month == now.month &&
+        date.year == now.year) {
+      final hour = date.hour;
+      final minute = date.minute.toString().padLeft(2, '0');
+      final isPM = hour >= 12;
+      final formattedHour = hour % 12 == 0 ? 12 : hour % 12;
+
+      return "$formattedHour:$minute ${isPM ? 'PM' : 'AM'}";
+    }
+
+    // Yesterday or older → show date
+    return "${date.day}/${date.month}/${date.year}";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("All Support Chats")),
-
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          "All Support Chats",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        foregroundColor: Colors.black,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("adminChat")
             .orderBy("lastTime", descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-
-          if (!snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          var chats = snapshot.data!.docs;
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No support chats found."));
+          }
+
+          final chats = snapshot.data!.docs;
 
           return ListView.builder(
             itemCount: chats.length,
             itemBuilder: (context, index) {
+              final data =
+                  chats[index].data() as Map<String, dynamic>? ?? {};
 
-              final data = chats[index].data() as Map<String, dynamic>? ?? {};
-              final chatId = chats[index].id;
-
-              // ================= SAFE PARTICIPANTS =================
               List participants =
               (data["participants"] is List) ? data["participants"] : [];
 
@@ -40,40 +71,28 @@ class AdminChatListScreen extends StatelessWidget {
                 orElse: () => "unknown",
               );
 
-              // ================= LAST MESSAGE =================
               String lastMessage = data["lastMessage"] ?? "";
               String lastType = data["lastType"] ?? "text";
-
               Timestamp? lastTime = data["lastTime"] as Timestamp?;
-              Timestamp? lastSeenAdmin =
-              (data["lastSeen"]?["admin"]) as Timestamp?;
 
-              // ================= UNREAD LOGIC =================
-              bool hasUnread = false;
+              bool isSeen = data["isSeen"] ?? true;
+              String lastSenderId = data["senderId"] ?? "";
 
-              if (lastTime != null) {
-                if (lastSeenAdmin == null) {
-                  hasUnread = true;
-                } else {
-                  hasUnread = lastTime.millisecondsSinceEpoch >
-                      lastSeenAdmin.millisecondsSinceEpoch;
-                }
-              }
+              // 🔵 unread logic
+              bool isUnread = lastSenderId != "admin" && isSeen == false;
 
-              // ================= SUBTITLE =================
-              // ================= SUBTITLE =================
-              Widget subtitle;
+              Widget subtitleWidget;
 
               if (lastType == "image") {
-                subtitle = const Row(
+                subtitleWidget = const Row(
                   children: [
                     Icon(Icons.image, size: 16, color: Colors.grey),
                     SizedBox(width: 5),
-                    Text("Photo"),
+                    Text("Photo", style: TextStyle(color: Colors.grey)),
                   ],
                 );
               } else {
-                subtitle = Text(
+                subtitleWidget = Text(
                   lastMessage,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -81,28 +100,9 @@ class AdminChatListScreen extends StatelessWidget {
                 );
               }
 
-              // ================= SEEN ICON =================
-              Widget seenIcon = const Icon(
-                Icons.done,
-                size: 18,
-                color: Colors.grey,
-              );
-
-              if (lastTime != null && lastSeenAdmin != null) {
-                bool seen = lastSeenAdmin.toDate().isAfter(
-                  lastTime.toDate(),
-                );
-
-                seenIcon = Icon(
-                  seen ? Icons.done_all : Icons.done,
-                  size: 18,
-                  color: seen ? Colors.blue : Colors.grey,
-                );
-              }
-
               return FutureBuilder<DocumentSnapshot>(
                 future: FirebaseFirestore.instance
-                    .collection("seller")
+                    .collection("saller")
                     .doc(userId)
                     .get()
                     .then((sellerDoc) async {
@@ -116,60 +116,131 @@ class AdminChatListScreen extends StatelessWidget {
                   }
                 }),
                 builder: (context, userSnap) {
+                  if (userSnap.connectionState ==
+                      ConnectionState.waiting) {
+                    return ListTile(
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFFF5F5F5),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      ),
+                      title: Container(
+                        width: 100,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      subtitle: Container(
+                        width: 150,
+                        height: 10,
+                        margin: const EdgeInsets.only(top: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    );
+                  }
 
-                  String name = userId;
+                  String name = "User";
                   String image = "";
 
-                  if (userSnap.hasData && userSnap.data!.exists) {
-                    var userData = userSnap.data!.data() as Map<String, dynamic>;
+                  if (userSnap.hasData &&
+                      userSnap.data!.exists) {
+                    var userData =
+                    userSnap.data!.data()
+                    as Map<String, dynamic>;
 
                     name = userData["name"] ??
                         userData["username"] ??
                         userData["fullName"] ??
-                        userId;
+                        "User";
 
-                    image = userData["image"] ?? userData["profileImage"] ?? "";
+                    image = userData["image"] ??
+                        userData["profileImage"] ??
+                        "";
                   }
 
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
+                      backgroundColor:
+                      Colors.blue.withOpacity(0.1),
+                      backgroundImage:
+                      image.isNotEmpty ? NetworkImage(image) : null,
                       child: image.isEmpty
                           ? Text(
-                        name.length >= 2
-                            ? name.substring(0, 2).toUpperCase()
-                            : "D",
+                        name.isNotEmpty
+                            ? name[0].toUpperCase()
+                            : "?",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
                       )
                           : null,
                     ),
-
-
-                    title: Text(name),
+                    title: Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
 
                     subtitle: Row(
                       children: [
-                        Expanded(child: subtitle),
+                        // ✔ tick before message
+                        Icon(
+                          isSeen
+                              ? Icons.done_all
+                              : Icons.done,
+                          size: 16,
+                          color:
+                          isSeen ? Colors.blue : Colors.grey,
+                        ),
+
                         const SizedBox(width: 6),
-                        seenIcon,
+
+                        // message
+                        Expanded(child: subtitleWidget),
+
+                        const SizedBox(width: 6),
+
+                        // 🕒 time
+                        Text(
+                          _formatTime(lastTime),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+
+                        const SizedBox(width: 6),
+
+                        // 🔵 unread dot
+                        if (isUnread)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
                       ],
                     ),
-
-                    trailing: hasUnread
-                        ? Container(
-                      width: 12,
-                      height: 12,
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                      ),
-                    )
-                        : const SizedBox(),
 
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => AdminChatScreen(userId: userId),
+                          builder: (_) =>
+                              AdminChatScreen(userId: userId),
                         ),
                       );
                     },

@@ -116,6 +116,9 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
       // If Approved and NOT Restricted -> set to 'pending' (Reviewing changes)
       // If NOT Approved and NOT Restricted -> keep 'editable'
       String newStoreStatus = 'editable';
+      if (isAdminApproved == true && isSellerRestricted == true) {
+        newStoreStatus = 'pending';
+      } else
       if (isAdminApproved == true && isSellerRestricted == false) {
         newStoreStatus = 'pending';
       } else if (isAdminApproved == false && isSellerRestricted == false) {
@@ -219,15 +222,23 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
           }
 
           // Dynamic lock messages for the user
+        if (status == "editable" && hasSetupStore && isRestricted==true && isAdminApproved==true) {
+          // This catches 'pending', 'rejected', or any other non-editable status
+          canEditInDb = true;
+        } else
           if (isRestricted) {
             lockMessage = "Account Restricted";
           } else if (!isAdminApproved && hasSetupStore) {
             lockMessage = "Waiting for Admin Approval";
-          } else if (status != "editable" && hasSetupStore) {
+          } else if (status == "pending" && hasSetupStore) {
             // This catches 'pending', 'rejected', or any other non-editable status
             lockMessage = "Profile is Under Review";
+          } else if (status == "approved" && hasSetupStore && isRestricted==false && isAdminApproved==true) {
+            // This catches 'pending', 'rejected', or any other non-editable status
+            canEditInDb = true;
           }
         }
+
 
         // Final check: Fields are only interactive if (Allowed by DB AND User clicked Edit)
         // OR if the account hasn't been set up yet.

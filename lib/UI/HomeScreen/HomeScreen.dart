@@ -458,7 +458,7 @@ class _HomescreenState extends State<Homescreen> {
 
   Widget _buildChatIcon() {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => UserChatListScreen(currentUserId: _auth.currentUser!.uid))),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => UserChatListScreen())),
       child: Stack(
         children: [
           const Padding(

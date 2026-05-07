@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:zrai_mart/app_colors.dart';
+import '../../../Notification/send_notification.dart';
 import 'AdminChatService.dart';
 
 class AdminChatScreen extends StatefulWidget {
@@ -34,7 +35,6 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
       debugPrint(e.toString());
     }
     // Initial check when opening the screen
-    chatService.createChatIfNotExists(chatId, widget.userId);
 
     FirebaseFirestore.instance
         .collection("messages")
@@ -42,6 +42,10 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
+      if(snapshot.docs.isEmpty){
+        chatService.createChatIfNotExists(chatId, widget.userId);
+
+      }
 
       if (snapshot.docs.isNotEmpty) {
         var lastMsg = snapshot.docs.last;
@@ -286,7 +290,19 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
                   if (controller.text.trim().isEmpty) return;
                   String text = controller.text.trim();
                   controller.clear();
-                  await chatService.sendText(text, chatId, adminId);
+                  await chatService.sendText(text, chatId, adminId,);
+
+                  await sendNotification(
+                    senderRole: "admin",
+                    senderId: widget.userId,
+                    sellerId: widget.userId,
+                    userId: widget.userId,
+                    title: "New Message from Support",
+                    body: text,
+                    type: "message",
+                    category: "admin_support",
+                    actionId: chatId,
+                  );
                   _scrollToBottom();
                 },
               ),

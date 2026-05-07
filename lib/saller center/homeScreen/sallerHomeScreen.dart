@@ -425,7 +425,7 @@ class _sallerHomescreenState extends State<sallerHomescreen> {
 
   Widget _buildChatIcon() {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerChatListScreen(sellerId: _auth.currentUser!.uid))),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerChatListScreen())),
       child: Stack(
         children: [
           const Padding(
@@ -441,7 +441,7 @@ class _sallerHomescreenState extends State<sallerHomescreen> {
 
   Widget _buildNewSearchBar() {
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen(isSeller: true,))),
       child: Container(
         height: 45,
         decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(15)),

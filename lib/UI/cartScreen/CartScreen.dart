@@ -18,10 +18,8 @@ class _CartscreenState extends State<Cartscreen> {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-
     return Scaffold(
-      backgroundColor: Colors.grey[50], // Light background for contrast
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
@@ -32,187 +30,100 @@ class _CartscreenState extends State<Cartscreen> {
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser?.uid)
-            .collection('addToCart')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      // --- WRAP EVERYTHING IN USER STATUS CHECK ---
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('users').doc(currentUser?.uid).snapshots(),
+        builder: (context, userSnapshot) {
+          if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.green));
           }
-          if (snapshot.hasError) {
-            return const Center(child: Text('Something went wrong'));
+
+          final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+          final String status = userData?['userStatus'] ?? 'pending';
+
+          // 1. Check if user is approved
+          if (status != 'approved') {
+            return _buildRestrictedUI(status);
           }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+
+          // 2. If approved, show the actual Cart Stream
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUser?.uid)
+                .collection('addToCart')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Colors.green));
+              }
+
+              // ... keep your existing "empty cart" and "ListBuilder" logic here ...
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return _buildEmptyCartUI();
+              }
+
+              final cartItems = snapshot.data!.docs;
+              double totalPrice = 0.0;
+              for (var item in cartItems) {
+                totalPrice += (item['price'] as num).toDouble() * ((item['quantity'] as num?)?.toInt() ?? 1);
+              }
+
+              return Column(
                 children: [
-                  Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey[300]),
-                  const SizedBox(height: 16),
-                  const Text('Your cart is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                  // ... keep your existing ListView and Checkout Summary Section ...
                 ],
-              ),
-            );
-          }
-
-          final cartItems = snapshot.data!.docs;
-          double totalPrice = 0.0;
-
-          for (var item in cartItems) {
-            final double productPrice = (item['price'] as num).toDouble();
-            final int productQuantity = (item['quantity'] as num?)?.toInt() ?? 1;
-            totalPrice += productPrice * productQuantity;
-          }
-
-          return Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  itemCount: cartItems.length,
-                  itemBuilder: (context, index) {
-                    final cartItem = cartItems[index];
-                    final productTitle = cartItem['title'];
-                    final description = cartItem['description'];
-                    final category = cartItem['category'];
-                    final productImageUrl = List<String>.from(cartItem['imageUrl'] ?? []);
-                    final double productPrice = (cartItem['price'] as num).toDouble();
-                    final int productQuantity = (cartItem['quantity'] as num?)?.toInt() ?? 1;
-                    final double productTotalPrice = productPrice * productQuantity;
-                    final String sellerId = cartItem['sallerId'];
-                    final bool isRental = cartItem['isRental'];
-                    final id = cartItem['productId'];
-                    final String rating = cartItem['averageRating'];
-                    final String quantity = cartItem['aQuantity'].toString();
-
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
-                        ],
-                      ),
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => customerProductfullview(
-                                imageUrls: productImageUrl,
-                                productName: productTitle,
-                                shortDescription: description,
-                                price: productPrice,
-                                categoryName: category,
-                                sellerId: sellerId,
-                                isRental: isRental,
-                                id: id,
-                                rating: rating,
-                                quantity: quantity,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(
-                                  productImageUrl[0],
-                                  width: 85,
-                                  height: 85,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              const SizedBox(width: 15),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      productTitle,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'PKR ${productPrice.toStringAsFixed(2)}',
-                                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    QuantityControl(
-                                      availableQuantity: int.parse(quantity),
-                                      initialQuantity: productQuantity,
-                                      onQuantityChanged: (newQuantity) {
-                                        _updateQuantity(cartItem.id, newQuantity);
-                                      },
-                                      onRemove: () {
-                                        showProductBottomSheet(context, cartItem);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              // --- Checkout Summary Section ---
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Subtotal', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                        Text('PKR ${totalPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    if (!loading)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: () => _showOrderDialog(cartItems, totalPrice.toString()),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            "CHECKOUT",
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+              );
+            },
           );
         },
+      ),
+    );
+  }
+
+  // Helper widget to show when user is blocked/restricted
+  Widget _buildRestrictedUI(String status) {
+    bool isBlocked = status == 'blocked';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isBlocked ? Icons.block_flipped : Icons.lock_clock_rounded,
+              size: 100,
+              color: isBlocked ? Colors.red[300] : Colors.amber[400],
+            ),
+            const SizedBox(height: 24),
+            Text(
+              isBlocked ? "Cart Access Blocked" : "Access Restricted",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isBlocked
+                  ? "Your account has been suspended. You cannot view your cart or place orders."
+                  : "Your account is currently $status. Please wait for admin approval to use the cart.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 15),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Extracted your empty cart UI for cleaner code
+  Widget _buildEmptyCartUI() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          const Text('Your cart is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }
