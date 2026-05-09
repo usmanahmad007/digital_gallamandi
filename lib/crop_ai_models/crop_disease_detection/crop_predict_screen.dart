@@ -46,6 +46,7 @@ class _CropPredictScreenState extends State<CropPredictScreen> {
 
       if (responseString != null) {
         final Map<String, dynamic> data = jsonDecode(responseString);
+        debugPrint(data.toString());
         setState(() {
           prediction = data['prediction'];
           confidence = (data['confidence'] as num).toDouble();

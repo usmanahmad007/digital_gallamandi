@@ -14,7 +14,6 @@ class Cartscreen extends StatefulWidget {
 
 class _CartscreenState extends State<Cartscreen> {
   final User? currentUser = FirebaseAuth.instance.currentUser;
-  bool loading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +29,6 @@ class _CartscreenState extends State<Cartscreen> {
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
-      // --- WRAP EVERYTHING IN USER STATUS CHECK ---
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(currentUser?.uid).snapshots(),
         builder: (context, userSnapshot) {
@@ -41,12 +39,10 @@ class _CartscreenState extends State<Cartscreen> {
           final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
           final String status = userData?['userStatus'] ?? 'pending';
 
-          // 1. Check if user is approved
           if (status != 'approved') {
             return _buildRestrictedUI(status);
           }
 
-          // 2. If approved, show the actual Cart Stream
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('users')
@@ -58,7 +54,6 @@ class _CartscreenState extends State<Cartscreen> {
                 return const Center(child: CircularProgressIndicator(color: Colors.green));
               }
 
-              // ... keep your existing "empty cart" and "ListBuilder" logic here ...
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return _buildEmptyCartUI();
               }
@@ -71,7 +66,111 @@ class _CartscreenState extends State<Cartscreen> {
 
               return Column(
                 children: [
-                  // ... keep your existing ListView and Checkout Summary Section ...
+                  // --- CART ITEMS LIST ---
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(15),
+                      itemCount: cartItems.length,
+                      itemBuilder: (context, index) {
+                        final item = cartItems[index];
+                        final imageUrls = List<String>.from(item['imageUrl'] ?? []);
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 15),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 5))
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  imageUrls.isNotEmpty ? imageUrls[0] : '',
+                                  width: 90, height: 90, fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported),
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['title'] ?? 'Product',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      'PKR ${item['price']}',
+                                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    QuantityControl(
+                                      availableQuantity: int.tryParse(item['aQuantity'].toString()) ?? 10,
+                                      initialQuantity: (item['quantity'])?.toInt() ?? 1,
+                                      onQuantityChanged: (newQty) => _updateQuantity(item.id, newQty),
+                                      onRemove: () => showProductBottomSheet(context, item),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // --- CHECKOUT SUMMARY SECTION ---
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))
+                      ],
+                    ),
+                    child: SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Total Amount', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                              Text(
+                                'PKR ${totalPrice.toStringAsFixed(2)}',
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                              ),
+                              onPressed: () => _showOrderDialog(cartItems, totalPrice.toStringAsFixed(2)),
+                              child: const Text(
+                                'Checkout Now',
+                                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -81,7 +180,6 @@ class _CartscreenState extends State<Cartscreen> {
     );
   }
 
-  // Helper widget to show when user is blocked/restricted
   Widget _buildRestrictedUI(String status) {
     bool isBlocked = status == 'blocked';
     return Center(
@@ -114,7 +212,6 @@ class _CartscreenState extends State<Cartscreen> {
     );
   }
 
-  // Extracted your empty cart UI for cleaner code
   Widget _buildEmptyCartUI() {
     return Center(
       child: Column(
@@ -155,14 +252,14 @@ class _CartscreenState extends State<Cartscreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(productImageUrl[0], width: 80, height: 80, fit: BoxFit.cover),
+                    child: Image.network(productImageUrl.isNotEmpty ? productImageUrl[0] : '', width: 80, height: 80, fit: BoxFit.cover),
                   ),
                   const SizedBox(width: 15),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(cartItem['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(cartItem['title'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 5),
                         Text('PKR ${productTotalPrice.toStringAsFixed(2)}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                       ],
@@ -262,6 +359,7 @@ class _CartscreenState extends State<Cartscreen> {
   }
 }
 
+// --- QUANTITY CONTROL WIDGET (STAYS THE SAME AS YOUR INPUT) ---
 class QuantityControl extends StatefulWidget {
   final int availableQuantity;
   final int initialQuantity;
@@ -290,7 +388,6 @@ class _QuantityControlState extends State<QuantityControl> {
     productQuantity = widget.initialQuantity;
   }
 
-  // Logic to handle the mathematical change
   void _changeQuantity(bool isIncreasing) {
     setState(() {
       if (isIncreasing && productQuantity < widget.availableQuantity) {
@@ -302,16 +399,15 @@ class _QuantityControlState extends State<QuantityControl> {
     widget.onQuantityChanged(productQuantity);
   }
 
-  // Logic for continuous increment/decrement
   void _startContinuousChange(bool isIncreasing) {
-    _stopContinuousChange(); // Safety clear
+    _stopContinuousChange();
     _continuousTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (isIncreasing && productQuantity < widget.availableQuantity) {
         _changeQuantity(true);
       } else if (!isIncreasing && productQuantity > 1) {
         _changeQuantity(false);
       } else {
-        _stopContinuousChange(); // Stop if limit reached
+        _stopContinuousChange();
       }
     });
   }
@@ -338,27 +434,23 @@ class _QuantityControlState extends State<QuantityControl> {
           ),
           child: Row(
             children: [
-              // DECREMENT BUTTON
               GestureDetector(
-                onTap: () => _changeQuantity(false), // Single tap
-                onLongPressStart: (_) => _startContinuousChange(false), // Hold start
-                onLongPressEnd: (_) => _stopContinuousChange(), // Hold end
+                onTap: () => _changeQuantity(false),
+                onLongPressStart: (_) => _startContinuousChange(false),
+                onLongPressEnd: (_) => _stopContinuousChange(),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Icon(Icons.remove, size: 20, color: Colors.black54),
                 ),
               ),
-
               Text(
                 '$productQuantity',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-
-              // INCREMENT BUTTON
               GestureDetector(
-                onTap: () => _changeQuantity(true), // Single tap
-                onLongPressStart: (_) => _startContinuousChange(true), // Hold start
-                onLongPressEnd: (_) => _stopContinuousChange(), // Hold end
+                onTap: () => _changeQuantity(true),
+                onLongPressStart: (_) => _startContinuousChange(true),
+                onLongPressEnd: (_) => _stopContinuousChange(),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Icon(Icons.add, size: 20, color: Colors.black54),

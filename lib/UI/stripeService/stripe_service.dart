@@ -8,15 +8,33 @@ class StripeService {
   StripeService._();
 
   static final StripeService instance = StripeService._();
+
   String stripeSecretKey = dotenv.env['stripeSecretKey'] ?? '';
+
+  // =========================
+  // MAIN PAYMENT FUNCTION
+  // =========================
   Future<bool> makePayment(int amount) async {
+    print(stripeSecretKey);
+    print("🚀 ===== STRIPE PAYMENT START =====");
+    print("💰 Amount received: $amount");
+    print("🔑 Secret key exists: ${stripeSecretKey.isNotEmpty}");
+
     try {
-      String? paymentIntentClientSecret = await _createPaymentIntent(amount, 'pkr');
+      print("📡 Creating PaymentIntent...");
+
+      String? paymentIntentClientSecret =
+      await _createPaymentIntent(amount, 'pkr');
+
+      print("🔐 Client Secret: $paymentIntentClientSecret");
 
       if (paymentIntentClientSecret == null) {
+        print("❌ PaymentIntent is NULL");
         showToastMessage("Failed to initialize payment.");
         return false;
       }
+
+      print("⚙️ Initializing Stripe Payment Sheet...");
 
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
@@ -25,23 +43,40 @@ class StripeService {
         ),
       );
 
+      print("📲 Presenting Payment Sheet...");
+
       bool flag = await _processPayment();
-      print("Payment Successful$flag");
-      if (flag==false) {
+
+      print("📩 Payment result: $flag");
+
+      if (flag == false) {
+        print("❌ Payment failed in process step");
         showToastMessage("Error in proceeding with payment");
         return false;
       } else {
+        print("✅ Payment Successful");
         showToastMessage("Payment Successful");
       }
+
+      print("🏁 ===== STRIPE PAYMENT END =====");
       return true;
-    } catch (e) {
-      print("Error in makePayment: $e");
+    } catch (e, stack) {
+      print("🔥 ERROR in makePayment:");
+      print(e);
+      print("📍 Stacktrace:");
+      print(stack);
+
       showToastMessage("Error in proceeding with payment");
       return false;
     }
   }
 
+  // =========================
+  // TOAST
+  // =========================
   void showToastMessage(String message) {
+    print("📢 TOAST: $message");
+
     Fluttertoast.showToast(
       msg: message,
       toastLength: Toast.LENGTH_SHORT,
@@ -52,25 +87,50 @@ class StripeService {
     );
   }
 
+  // =========================
+  // PAYMENT SHEET
+  // =========================
   Future<bool> _processPayment() async {
     try {
+      print("💳 Opening Stripe Payment Sheet...");
+
       await Stripe.instance.presentPaymentSheet();
-    //  await Stripe.instance.confirmPaymentSheetPayment();
+
+      print("🎉 Payment Sheet completed successfully");
       return true;
-    } catch (e) {
-      print("Payment cancelled or failed: $e");
+    } catch (e, stack) {
+      print("❌ Payment cancelled or failed:");
+      print(e);
+      print("📍 Stacktrace:");
+      print(stack);
+
       showToastMessage("Payment has been cancelled");
       return false;
     }
   }
 
+  // =========================
+  // CREATE PAYMENT INTENT
+  // =========================
   Future<String?> _createPaymentIntent(int amount, String currency) async {
     try {
+      print("🌐 ===== CREATING PAYMENT INTENT =====");
+      print("💰 Raw amount: $amount");
+      print("💱 Currency: $currency");
+      print("🔑 Secret key length: ${stripeSecretKey.length}");
+
       final Dio dio = Dio();
+
       Map<String, dynamic> data = {
         "amount": _calculateAmount(amount),
         "currency": currency,
+        "payment_method_types[]": "card",
       };
+
+      print("📦 Request Data:");
+      print(data);
+
+      print("📡 Sending request to Stripe...");
 
       var response = await dio.post(
         "https://api.stripe.com/v1/payment_intents",
@@ -79,27 +139,44 @@ class StripeService {
           contentType: Headers.formUrlEncodedContentType,
           headers: {
             "Authorization": "Bearer $stripeSecretKey",
-            "Content-Type": 'application/x-www-form-urlencoded',
           },
         ),
       );
 
+      print("📨 Stripe Response Status: ${response.statusCode}");
+      print("📨 Stripe Response Data: ${response.data}");
+
       if (response.statusCode == 200 && response.data != null) {
+        print("✅ PaymentIntent created successfully");
+
         return response.data["client_secret"];
       } else {
-        print("Failed to create PaymentIntent: ${response.statusCode}");
-        showToastMessage("Failed to create PaymentIntent. Please try again.");
+        print("❌ Failed PaymentIntent: ${response.statusCode}");
+        showToastMessage("Failed to create PaymentIntent.");
       }
+
       return null;
-    } catch (e) {
-      print("Error creating PaymentIntent: $e");
-      showToastMessage("Failed to create PaymentIntent. Please try again.");
+    } catch (e, stack) {
+      print("🔥 ERROR creating PaymentIntent:");
+      print(e);
+      print("📍 Stacktrace:");
+      print(stack);
+
+      showToastMessage("Failed to create PaymentIntent.");
       return null;
     }
   }
 
+  // =========================
+  // AMOUNT CONVERSION
+  // =========================
   String _calculateAmount(int amount) {
-    final calculatedAmount = amount * 100; // Convert to the smallest currency unit
+    final calculatedAmount = amount * 100;
+
+    print("🧮 Calculating amount:");
+    print("➡️ Input: $amount");
+    print("➡️ Output (cents): $calculatedAmount");
+
     return calculatedAmount.toString();
   }
 }
