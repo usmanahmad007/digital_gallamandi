@@ -124,7 +124,7 @@ class _SigninscreenState extends State<Signinscreen> {
                   GestureDetector(
                     onTap: ()=> Navigator.push(context, MaterialPageRoute(builder: (context)=>PinCScreen())),
                     child: Center(
-                      child: Image.asset("assets/img_1.png", height: 160),
+                      child: Image.asset("assets/logo.png", height: 160),
                     ),
                   ),
                   const SizedBox(height: 40),

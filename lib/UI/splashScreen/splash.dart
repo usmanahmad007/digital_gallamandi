@@ -113,17 +113,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset("assets/img_1.png", width: 220, height: 220),
+                  Image.asset("assets/logo.png", width: 220, height: 220),
                   const SizedBox(height: 20),
-                  Text(
-                    "DIGITAL GALLA MANDI",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
-                      color: AppColors.primaryGreen.withOpacity(0.8),
-                    ),
-                  ),
+
                 ],
               ),
             ),
@@ -139,14 +131,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  "Empowering Farmers Digitally",
-                  style: TextStyle(
-                    color: AppColors.textGrey.withOpacity(0.6),
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
               ],
             ),
           ),

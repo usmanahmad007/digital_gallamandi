@@ -112,7 +112,7 @@ class _SignupscreenState extends State<Signupscreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const SizedBox(height: 20),
-                  Image.asset("assets/img_1.png", width: 120, height: 120, color: Colors.white), // Assuming logo can be tinted
+                  Image.asset("assets/logo.png", width: 120, height: 120, ), // Assuming logo can be tinted
                   const Text("Join Digital Galla Mandi", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                 ],
               ),

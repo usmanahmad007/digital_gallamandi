@@ -81,7 +81,7 @@ dependency_overrides:
 flutter_launcher_icons:
   android: true
   #ios: true
-  image_path: "assets/img_1.png"
+  image_path: "assets/logo.png"
 
 
 dev_dependencies:
